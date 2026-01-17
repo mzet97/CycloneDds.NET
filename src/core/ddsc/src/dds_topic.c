@@ -1202,7 +1202,9 @@ DDS_EXPORT struct ddsi_serdata *dds_serdata_ref(struct ddsi_serdata *serdata) {
 }
 
 DDS_EXPORT void dds_serdata_unref(struct ddsi_serdata *serdata) {
+    //printf("[native] dds_serdata_unref called for 0x%p\n", serdata);
     ddsi_serdata_unref(serdata);
+    //printf("[native] dds_serdata_unref finished for 0x%p\n", serdata);
 }
 
 DDS_EXPORT uint32_t dds_serdata_size(const struct ddsi_serdata *serdata) {

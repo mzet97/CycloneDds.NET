@@ -400,6 +400,7 @@ static void print_delete (const dds_entity *e, enum delete_impl_state delstate ,
 
 dds_return_t dds_delete (dds_entity_t entity)
 {
+  // printf("[native] dds_delete called for entity %d\n", entity);
   return dds_delete_impl (entity, DIS_USER);
 }
 

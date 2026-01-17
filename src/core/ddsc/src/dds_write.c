@@ -115,23 +115,28 @@ dds_return_t dds_write (dds_entity_t writer, const void *data)
 
 dds_return_t dds_writecdr (dds_entity_t writer, struct ddsi_serdata *serdata)
 {
+  //printf("[native] dds_writecdr called for writer 0x%x, serdata 0x%p\n", writer, serdata);
   dds_return_t ret;
   dds_writer *wr;
 
   if (serdata == NULL)
     return DDS_RETCODE_BAD_PARAMETER;
 
-  if ((ret = dds_writer_lock (writer, &wr)) != DDS_RETCODE_OK)
+  if ((ret = dds_writer_lock (writer, &wr)) != DDS_RETCODE_OK) {
+    ddsi_serdata_unref(serdata);
     return ret;
+  }
   if (wr->m_topic->m_filter.mode != DDS_TOPIC_FILTER_NONE)
   {
     dds_writer_unlock (wr);
+    ddsi_serdata_unref(serdata);
     return DDS_RETCODE_ERROR;
   }
   serdata->statusinfo = 0;
   serdata->timestamp.v = dds_time ();
   ret = dds_writecdr_impl (wr, wr->m_xp, serdata, !wr->whc_batch);
   dds_writer_unlock (wr);
+  //printf("[native] dds_writecdr returned %d\n", ret);
   return ret;
 }
 
