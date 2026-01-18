@@ -115,7 +115,6 @@ dds_return_t dds_write (dds_entity_t writer, const void *data)
 
 dds_return_t dds_writecdr (dds_entity_t writer, struct ddsi_serdata *serdata)
 {
-  //printf("[native] dds_writecdr called for writer 0x%x, serdata 0x%p\n", writer, serdata);
   dds_return_t ret;
   dds_writer *wr;
 
@@ -136,7 +135,6 @@ dds_return_t dds_writecdr (dds_entity_t writer, struct ddsi_serdata *serdata)
   serdata->timestamp.v = dds_time ();
   ret = dds_writecdr_impl (wr, wr->m_xp, serdata, !wr->whc_batch);
   dds_writer_unlock (wr);
-  //printf("[native] dds_writecdr returned %d\n", ret);
   return ret;
 }
 
@@ -978,5 +976,55 @@ dds_return_t dds_writecdr_local_orphan_impl (struct ddsi_local_orphan_writer *lo
   ddsi_tkmap_instance_unref (lowr->wr.e.gv->m_tkmap, tk);
   ddsi_serdata_unref(d); // d = din: refc(d) = r - 1
   ddsi_thread_state_asleep (thrst);
+  return ret;
+}
+
+DDS_EXPORT dds_return_t dds_dispose_serdata (dds_entity_t writer, struct ddsi_serdata *serdata)
+{
+  dds_return_t ret;
+  dds_writer *wr;
+
+  if (serdata == NULL)
+    return DDS_RETCODE_BAD_PARAMETER;
+
+  if ((ret = dds_writer_lock (writer, &wr)) != DDS_RETCODE_OK) {
+    ddsi_serdata_unref(serdata);
+    return ret;
+  }
+  if (wr->m_topic->m_filter.mode != DDS_TOPIC_FILTER_NONE)
+  {
+    dds_writer_unlock (wr);
+    ddsi_serdata_unref(serdata);
+    return DDS_RETCODE_ERROR;
+  }
+  serdata->statusinfo = DDSI_STATUSINFO_DISPOSE;
+  serdata->timestamp.v = dds_time ();
+  ret = dds_writecdr_impl (wr, wr->m_xp, serdata, !wr->whc_batch);
+  dds_writer_unlock (wr);
+  return ret;
+}
+
+DDS_EXPORT dds_return_t dds_unregister_serdata (dds_entity_t writer, struct ddsi_serdata *serdata)
+{
+  dds_return_t ret;
+  dds_writer *wr;
+
+  if (serdata == NULL)
+    return DDS_RETCODE_BAD_PARAMETER;
+
+  if ((ret = dds_writer_lock (writer, &wr)) != DDS_RETCODE_OK) {
+    ddsi_serdata_unref(serdata);
+    return ret;
+  }
+  if (wr->m_topic->m_filter.mode != DDS_TOPIC_FILTER_NONE)
+  {
+    dds_writer_unlock (wr);
+    ddsi_serdata_unref(serdata);
+    return DDS_RETCODE_ERROR;
+  }
+  serdata->statusinfo = DDSI_STATUSINFO_UNREGISTER;
+  serdata->timestamp.v = dds_time ();
+  ret = dds_writecdr_impl (wr, wr->m_xp, serdata, !wr->whc_batch);
+  dds_writer_unlock (wr);
   return ret;
 }
