@@ -12,6 +12,7 @@
 #include <ctype.h>
 #include <assert.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "dds/ddsrt/heap.h"
 #include "dds/ddsrt/log.h"
@@ -409,24 +410,33 @@ err:
 
 static struct dds_serdata_default *serdata_default_from_ser_iov_common (const struct ddsi_sertype *tpcmn, enum ddsi_serdata_kind kind, ddsrt_msg_iovlen_t niov, const ddsrt_iovec_t *iov, size_t size)
 {
+  printf("[native] serdata_default_from_ser_iov_common enter. size=%zu niov=%u\n", size, niov);
   const struct dds_sertype_default *tp = (const struct dds_sertype_default *)tpcmn;
 
   /* FIXME: check whether this really is the correct maximum: offsets are relative
      to the CDR header, but there are also some places that use a serdata as-if it
      were a stream, and those use offsets (m_index) relative to the start of the
      serdata */
-  if (size > UINT32_MAX - offsetof (struct dds_serdata_default, hdr))
+  if (size > UINT32_MAX - offsetof (struct dds_serdata_default, hdr)) {
+    printf("[native] Size too large.\n");
     return NULL;
+  }
   assert (niov >= 1);
-  if (iov[0].iov_len < 4) /* CDR header */
+  if (iov[0].iov_len < 4) /* CDR header */ {
+    printf("[native] iov_len < 4.\n");
     return NULL;
+  }
   struct dds_serdata_default *d = serdata_default_new_size (tp, kind, (uint32_t) size, DDSI_RTPS_CDR_ENC_VERSION_UNDEF);
-  if (d == NULL)
+  if (d == NULL) {
+    printf("[native] serdata_default_new_size failed.\n");
     return NULL;
+  }
 
   memcpy (&d->hdr, iov[0].iov_base, sizeof (d->hdr));
-  if (!is_valid_xcdr_id (d->hdr.identifier))
+  if (!is_valid_xcdr_id (d->hdr.identifier)) {
+    printf("[native] Invalid XCDR ID: 0x%04x\n", d->hdr.identifier);
     goto err;
+  }
   serdata_default_append_blob (&d, iov[0].iov_len - 4, (const char *) iov[0].iov_base + 4);
   for (ddsrt_msg_iovlen_t i = 1; i < niov; i++)
     serdata_default_append_blob (&d, iov[i].iov_len, iov[i].iov_base);
@@ -436,17 +446,27 @@ static struct dds_serdata_default *serdata_default_from_ser_iov_common (const st
   const uint32_t pad = ddsrt_fromBE2u (d->hdr.options) & DDS_CDR_HDR_PADDING_MASK;
   const uint32_t xcdr_version = ddsi_sertype_enc_id_xcdr_version (d->hdr.identifier);
   const uint32_t encoding_format = ddsi_sertype_enc_id_enc_format (d->hdr.identifier);
-  if (ddsi_sertype_get_native_enc_identifier (xcdr_version, encoding_format) != ddsi_sertype_get_native_enc_identifier (xcdr_version, tp->encoding_format))
+  
+  printf("[native] XCDR Ver=%u EncFmt=%u NeedsBswap=%d Pad=%u\n", xcdr_version, encoding_format, needs_bswap, pad);
+
+  if (ddsi_sertype_get_native_enc_identifier (xcdr_version, encoding_format) != ddsi_sertype_get_native_enc_identifier (xcdr_version, tp->encoding_format)) {
+    printf("[native] Encoding mismatch. Data Ver=%u fmt=%u. Type fmt=%u\n", xcdr_version, encoding_format, tp->encoding_format);
     goto err;
+  }
 
   uint32_t actual_size;
-  if (d->pos < pad || !dds_stream_normalize (d->data, d->pos - pad, needs_bswap, xcdr_version, &tp->type, kind == SDK_KEY, &actual_size))
+  if (d->pos < pad || !dds_stream_normalize (d->data, d->pos - pad, needs_bswap, xcdr_version, &tp->type, kind == SDK_KEY, &actual_size)) {
+    printf("[native] dds_stream_normalize failed. pos=%u pad=%u version=%u\n", d->pos, pad, xcdr_version);
     goto err;
+  }
 
   dds_istream_t is;
   dds_istream_init (&is, actual_size, d->data, xcdr_version);
-  if (!gen_serdata_key_from_cdr (&is, &d->key, tp, kind == SDK_KEY))
+  if (!gen_serdata_key_from_cdr (&is, &d->key, tp, kind == SDK_KEY)) {
+    printf("[native] gen_serdata_key_from_cdr failed.\n");
     goto err;
+  }
+  printf("[native] serdata_default_from_ser_iov_common success.\n");
   return d;
 
 err:

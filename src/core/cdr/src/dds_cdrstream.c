@@ -3789,12 +3789,18 @@ static bool normalize_string (char * restrict data, uint32_t * restrict off, uin
 {
   // maxsz = character count, includes terminating '\0' that is in-memory and on the wire
   uint32_t sz;
-  if (!read_and_normalize_uint32 (&sz, data, off, size, bswap))
+  if (!read_and_normalize_uint32 (&sz, data, off, size, bswap)) {
+    printf("[native] normalize_string: read len failed. off=%u size=%u\n", *off, size);
     return false;
-  if (sz == 0 || size - *off < sz || maxsz < sz)
+  }
+  if (sz == 0 || size - *off < sz || maxsz < sz) {
+    printf("[native] normalize_string: bound check failed. sz=%u left=%u maxsz=%zu\n", sz, size - *off, maxsz);
     return normalize_error_bool ();
-  if (data[*off + sz - 1] != 0)
+  }
+  if (data[*off + sz - 1] != 0) {
+    printf("[native] normalize_string: NUL check failed. val=%d\n", (int)data[*off + sz - 1]);
     return normalize_error_bool ();
+  }
   *off += sz;
   return true;
 }
