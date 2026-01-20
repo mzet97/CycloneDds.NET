@@ -298,6 +298,7 @@ const struct ddsi_sertype_ops dds_sertype_ops_default = {
 
 dds_return_t dds_sertype_default_init (const struct dds_domain *domain, struct dds_sertype_default *st, const dds_topic_descriptor_t *desc, uint16_t min_xcdrv, dds_data_representation_id_t data_representation)
 {
+  printf("DEBUG: Entering dds_sertype_default_init\n"); fflush(stdout);
   const struct ddsi_domaingv *gv = &domain->gv;
   const struct ddsi_serdata_ops *serdata_ops;
   switch (data_representation)
@@ -317,22 +318,32 @@ dds_return_t dds_sertype_default_init (const struct dds_domain *domain, struct d
      the extensibility that is returned here is used to set the CDR encapsulation identifier,
      but nested types can use a different data representation format (not version) */
   enum dds_cdr_type_extensibility type_ext;
+  printf("DEBUG: calling dds_stream_extensibility flags=%x ops=%p\n", desc->m_flagset, desc->m_ops); fflush(stdout);
   if (!dds_stream_extensibility (desc->m_ops, &type_ext))
+  {
+      printf("DEBUG: dds_stream_extensibility failed\n"); fflush(stdout);
     return DDS_RETCODE_BAD_PARAMETER;
+  }
+  printf("DEBUG: dds_stream_extensibility ok type_ext=%d\n", type_ext); fflush(stdout);
 
   uint32_t allowed_data_representation = desc->m_flagset & DDS_TOPIC_RESTRICT_DATA_REPRESENTATION ?
       desc->restrict_data_representation : DDS_DATA_REPRESENTATION_RESTRICT_DEFAULT;
   if (min_xcdrv == DDSI_RTPS_CDR_ENC_VERSION_2)
     allowed_data_representation &= ~DDS_DATA_REPRESENTATION_FLAG_XCDR1;
 
+  printf("DEBUG: calling ddsi_sertype_init_props\n"); fflush(stdout);
   ddsi_sertype_init_props (&st->c, desc->m_typename, &dds_sertype_ops_default, serdata_ops, desc->m_size, dds_stream_data_types (desc->m_ops), allowed_data_representation, 0);
+  printf("DEBUG: ddsi_sertype_init_props ok\n"); fflush(stdout);
+
   st->encoding_format = ddsi_sertype_extensibility_enc_format (type_ext);
   /* Store the encoding version used for writing data using this sertype. When reading data,
      the encoding version from the encapsulation header in the CDR is used */
   st->write_encoding_version = data_representation == DDS_DATA_REPRESENTATION_XCDR1 ? DDSI_RTPS_CDR_ENC_VERSION_1 : DDSI_RTPS_CDR_ENC_VERSION_2;
   st->serpool = domain->serpool;
 
+  printf("DEBUG: calling dds_cdrstream_desc_init_with_nops nkeys=%u ops=%p keys=%p\n", desc->m_nkeys, desc->m_ops, desc->m_keys); fflush(stdout);
   dds_cdrstream_desc_init_with_nops (&st->type, &dds_cdrstream_default_allocator, desc->m_size, desc->m_align, desc->m_flagset, desc->m_ops, desc->m_nops, desc->m_keys, desc->m_nkeys);
+  printf("DEBUG: dds_cdrstream_desc_init_with_nops ok\n"); fflush(stdout);
 
   if (min_xcdrv == DDSI_RTPS_CDR_ENC_VERSION_2 && dds_stream_type_nesting_depth (desc->m_ops) > DDS_CDRSTREAM_MAX_NESTING_DEPTH)
   {
@@ -367,9 +378,11 @@ dds_return_t dds_sertype_default_init (const struct dds_domain *domain, struct d
   if (st->type.opt_size_xcdr1 > 0)
     GVTRACE ("Marshalling XCDR1 for type: %s is %soptimised\n", st->c.type_name, st->type.opt_size_xcdr1 ? "" : "not ");
 
+  printf("DEBUG: calling dds_stream_check_optimize XCDR2\n"); fflush(stdout);
   st->type.opt_size_xcdr2 = (st->c.allowed_data_representation & DDS_DATA_REPRESENTATION_FLAG_XCDR2) ? dds_stream_check_optimize (&st->type, DDSI_RTPS_CDR_ENC_VERSION_2) : 0;
   if (st->type.opt_size_xcdr2 > 0)
     GVTRACE ("Marshalling XCDR2 for type: %s is %soptimised\n", st->c.type_name, st->type.opt_size_xcdr2 ? "" : "not ");
 
+  printf("DEBUG: dds_sertype_default_init exiting OK\n"); fflush(stdout);
   return DDS_RETCODE_OK;
 }

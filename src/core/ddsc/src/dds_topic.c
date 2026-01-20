@@ -660,42 +660,73 @@ dds_entity_t dds_create_topic (dds_entity_t participant, const dds_topic_descrip
   struct dds_entity *ppent;
   dds_return_t ret;
 
+  if (descriptor) {
+      printf("DEBUG: dds_create_topic name=%s descriptor=%p\n", name, descriptor);
+      printf("DEBUG: desc->m_size=%u\n", descriptor->m_size);
+      printf("DEBUG: desc->m_align=%u\n", descriptor->m_align);
+      printf("DEBUG: desc->m_nkeys=%u\n", descriptor->m_nkeys);
+      printf("DEBUG: desc->m_typename=%p\n", descriptor->m_typename);
+      if (descriptor->m_typename) printf("DEBUG: desc->m_typename=%s\n", descriptor->m_typename);
+      printf("DEBUG: desc->m_keys=%p\n", descriptor->m_keys);
+      if (descriptor->m_nkeys > 0 && descriptor->m_keys) {
+          printf("DEBUG: key[0].m_name=%s\n", descriptor->m_keys[0].m_name);
+          printf("DEBUG: key[0].m_offset=%u\n", descriptor->m_keys[0].m_offset);
+      }
+      printf("DEBUG: desc->m_nops=%u\n", descriptor->m_nops);
+      printf("DEBUG: desc->m_ops=%p\n", descriptor->m_ops);
+      if (descriptor->m_nops > 0 && descriptor->m_ops) {
+          printf("DEBUG: ops[0]=%u\n", descriptor->m_ops[0]);
+      }
+      fflush(stdout);
+  }
+
   if (descriptor == NULL || name == NULL)
     return DDS_RETCODE_BAD_PARAMETER;
 
   if ((ret = dds_entity_pin (participant, &ppent)) < 0)
     return ret;
 
+  printf("DEBUG: Calling dds_create_qos\n"); fflush(stdout);
   dds_qos_t *tpqos = dds_create_qos ();
   if (qos)
     ddsi_xqos_mergein_missing (tpqos, qos, DDS_TOPIC_QOS_MASK);
 
-  /* Check the data representation in the provided QoS for compatiblity with the extensibility
-     of the types used in this topic. In case any functionality is used that we don't support in
-     XCDR1 (extensibility mutable and appendable, optional members), the XCDR2 data representation
-     is required and the only valid value for this QoS. If the data representation is not set in
-     the QoS (or no QoS object provided), the allowed data representations are added to the
-     QoS object. */
+  printf("DEBUG: Checking data representation\n"); fflush(stdout);
   uint32_t allowed_repr = descriptor->m_flagset & DDS_TOPIC_RESTRICT_DATA_REPRESENTATION ?
       descriptor->restrict_data_representation : DDS_DATA_REPRESENTATION_RESTRICT_DEFAULT;
+  printf("DEBUG: allowed_repr=%u\n", allowed_repr); fflush(stdout);
+
   uint16_t min_xcdrv = dds_stream_minimum_xcdr_version (descriptor->m_ops);
+  printf("DEBUG: min_xcdrv=%u\n", min_xcdrv); fflush(stdout);
+
   if (min_xcdrv == DDSI_RTPS_CDR_ENC_VERSION_2)
     allowed_repr &= ~DDS_DATA_REPRESENTATION_FLAG_XCDR1;
+  
   if ((ret = dds_ensure_valid_data_representation (tpqos, allowed_repr, dds_stream_data_types (descriptor->m_ops), DDS_KIND_TOPIC)) != DDS_RETCODE_OK)
-    goto err_data_repr;
+  {
+      printf("DEBUG: dds_ensure_valid_data_representation failed\n"); fflush(stdout);
+      goto err_data_repr;
+  }
 
   assert (tpqos->present & DDSI_QP_DATA_REPRESENTATION && tpqos->data_representation.value.n > 0);
   dds_data_representation_id_t data_representation = tpqos->data_representation.value.ids[0];
+  printf("DEBUG: data_representation=%u\n", data_representation); fflush(stdout);
 
+  printf("DEBUG: Allocating sertype default\n"); fflush(stdout);
   struct dds_sertype_default *st = ddsrt_malloc (sizeof (*st));
+  printf("DEBUG: calling dds_sertype_default_init\n"); fflush(stdout);
   if ((ret = dds_sertype_default_init (ppent->m_domain, st, descriptor, min_xcdrv, data_representation)) < 0)
   {
+    printf("DEBUG: dds_sertype_default_init failed\n"); fflush(stdout);
     ddsrt_free (st);
     goto err_st_init;
   }
+  printf("DEBUG: dds_sertype_default_init ok\n"); fflush(stdout);
 
   struct ddsi_sertype *st_tmp = &st->c;
+  printf("DEBUG: calling dds_create_topic_impl\n"); fflush(stdout);
   dds_entity_t hdl = dds_create_topic_impl (participant, name, false, &st_tmp, tpqos, listener, false);
+  printf("DEBUG: dds_create_topic_impl returned %d\n", hdl); fflush(stdout);
   if (hdl < 0)
     ddsi_sertype_unref (st_tmp);
   ret = hdl;
