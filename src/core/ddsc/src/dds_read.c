@@ -425,7 +425,7 @@ dds_return_t dds_readcdr (dds_entity_t reader_or_condition, struct ddsi_serdata 
   return dds_readcdr_impl (READ_OPER_READ, reader_or_condition, buf, maxs, si, mask, DDS_HANDLE_NIL);
 }
 
-dds_return_t dds_readcdr_instance (dds_entity_t reader_or_condition, struct ddsi_serdata **buf, uint32_t maxs, dds_sample_info_t *si, dds_instance_handle_t handle, uint32_t mask)
+DDS_EXPORT dds_return_t dds_readcdr_instance (dds_entity_t reader_or_condition, struct ddsi_serdata **buf, uint32_t maxs, dds_sample_info_t *si, dds_instance_handle_t handle, uint32_t mask)
 {
   if (handle == DDS_HANDLE_NIL)
     return DDS_RETCODE_PRECONDITION_NOT_MET;
@@ -437,7 +437,7 @@ dds_return_t dds_takecdr (dds_entity_t reader_or_condition, struct ddsi_serdata 
   return dds_readcdr_impl (READ_OPER_TAKE, reader_or_condition, buf, maxs, si, mask, DDS_HANDLE_NIL);
 }
 
-dds_return_t dds_takecdr_instance (dds_entity_t reader_or_condition, struct ddsi_serdata **buf, uint32_t maxs, dds_sample_info_t *si, dds_instance_handle_t handle, uint32_t mask)
+DDS_EXPORT dds_return_t dds_takecdr_instance (dds_entity_t reader_or_condition, struct ddsi_serdata **buf, uint32_t maxs, dds_sample_info_t *si, dds_instance_handle_t handle, uint32_t mask)
 {
   if (handle == DDS_HANDLE_NIL)
     return DDS_RETCODE_PRECONDITION_NOT_MET;

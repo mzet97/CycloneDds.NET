@@ -291,6 +291,27 @@ dds_instance_handle_t dds_lookup_instance (dds_entity_t entity, const void *data
   return ih;
 }
 
+DDS_EXPORT dds_instance_handle_t dds_lookup_instance_serdata (dds_entity_t entity, struct ddsi_serdata *serdata)
+{
+  dds_entity *w_or_r;
+
+  if (serdata == NULL)
+    return DDS_HANDLE_NIL;
+
+  if (dds_entity_lock (entity, DDS_KIND_DONTCARE, &w_or_r) < 0)
+    return DDS_HANDLE_NIL;
+
+  dds_instance_handle_t ih;
+  struct ddsi_thread_state * const thrst = ddsi_lookup_thread_state ();
+  ddsi_thread_state_awake (thrst, &w_or_r->m_domain->gv);
+  
+  ih = ddsi_tkmap_lookup (w_or_r->m_domain->gv.m_tkmap, serdata);
+  
+  ddsi_thread_state_asleep (thrst);
+  dds_entity_unlock (w_or_r);
+  return ih;
+}
+
 dds_return_t dds_instance_get_key (dds_entity_t entity, dds_instance_handle_t ih, void *data)
 {
   dds_return_t ret;
