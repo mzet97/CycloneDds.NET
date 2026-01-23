@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include "libidlc/libidlc_export.h"
 
 // Value type enumeration
 enum dm_type {
@@ -94,10 +95,10 @@ typedef struct dm_rec {
 } dm_rec_t;
 
 // Global state
-extern dm_rec_t* dm_sources;
-extern dm_rec_t* dm_types;
-extern dm_rec_t* dm_last_struct;
-extern dm_rec_t* dm_last_enum;
+LIBIDLC_EXPORT extern dm_rec_t* dm_sources;
+LIBIDLC_EXPORT extern dm_rec_t* dm_types;
+LIBIDLC_EXPORT extern dm_rec_t* dm_last_struct;
+LIBIDLC_EXPORT extern dm_rec_t* dm_last_enum;
 
 // Functions
 extern dm_rec_t* dm_new(void);

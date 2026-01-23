@@ -16,23 +16,9 @@ set(headers
   include/idlc/generator.h
   ${CMAKE_CURRENT_BINARY_DIR}/config.h)
   
-set(sources
-  src/idlc/idlc.c
-  src/idlc/generator.c
-  src/idlc/options.c)
-add_executable(idljson ${sources} ${headers})
 
-target_compile_definitions(idljson PRIVATE LIBIDLC_LIBRARY)
-target_link_libraries(idljson PRIVATE libidljson idl idlpp compat ddsc ${CMAKE_DL_LIBS})
 
-target_include_directories(
-  idljson PRIVATE
-    include/idlc
-    include/generator_common
-    ${CMAKE_CURRENT_BINARY_DIR}
-    $<BUILD_INTERFACE:$<TARGET_PROPERTY:ddsc,INTERFACE_INCLUDE_DIRECTORIES>>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../core/ddsi/include>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../core/cdr/include>)
+
 
 set(
   libidljson_hdrs
@@ -76,6 +62,10 @@ target_include_directories(
   libidljson
   PRIVATE
     include
+    include/idlc
+    include/generator_common
+    ${CMAKE_CURRENT_BINARY_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}/include
   PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include/libidlc>"
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/libidlc>"

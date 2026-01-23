@@ -100,6 +100,7 @@ void dm_calculate_layout(dm_rec_t* struct_rec) {
     
     uint32_t cursor = 0;
     uint32_t max_align = 1;
+    uint32_t union_max_size = 0;
     
     int is_union = (struct_rec->kind && strcmp(struct_rec->kind, "union") == 0);
     
@@ -149,7 +150,11 @@ void dm_calculate_layout(dm_rec_t* struct_rec) {
         if (!is_union) {
             cursor += member_size;
         } else {
-            if (member_size > cursor) cursor = member_size;
+            if (member_size > union_max_size) union_max_size = member_size;
+            // cursor tracks max size for union? No, cursor is used for offset for NEXT.
+            // But for union, offset is always 0 (handled above).
+            // So we just track max size.
+            cursor = union_max_size;
         }
         
         if (member_align > max_align) {

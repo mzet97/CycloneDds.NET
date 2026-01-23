@@ -13,7 +13,8 @@ include(CUnit)
 
 set(sources
   test_common.c
-  descriptor.c)
+  descriptor.c
+  json_test.c)
 
 if(ENABLE_TYPELIB)
   list(APPEND sources
