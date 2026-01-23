@@ -188,10 +188,10 @@ CU_Test(json_model, array_and_typedef) {
 
 CU_Test(json_model, qos_extraction) {
     const char* idl = 
-        "#pragma topic reliable transient_local keep_last 1\n"
         "struct QosTopic {\n"
         "  long id;\n"
-        "};\n";
+        "};\n"
+        "#pragma topic reliable transient_local keep_last 1\n";
 
     idl_retcode_t ret = run_json_generation(idl);
     CU_ASSERT_EQ_FATAL(ret, IDL_RETCODE_OK);

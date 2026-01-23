@@ -311,23 +311,18 @@ static void parse_qos_value(const char* token, dm_qos_t* qos) {
     }
 }
 
-// Scans backward from struct location to find #pragma topic
+// Scans for #pragma topic AFTER the struct
 static void scan_for_pragma_topic(const idl_pstate_t* pstate, const idl_struct_t* s, dm_qos_t* qos) {
     if (!pstate->buffer.data) return;
 
-    // Get location of the struct
-    const idl_location_t* loc = &s->name->symbol.location;
-    // idl_location_t uses line numbers. We need character offset if possible, 
-    // or we have to scan the whole buffer line by line.
-    
-    // Simple approach: scan the whole buffer for "#pragma topic" lines, 
-    // and see if they are immediately before our struct.
+    // Get location of the struct (use node location to get the end line)
+    const idl_location_t* loc = &s->node.symbol.location;
+    int struct_end_line = loc->last.line;
     
     char* cursor = pstate->buffer.data;
     char* line_start = cursor;
     char* last_pragma_topic = NULL;
     int current_line = 1;
-    int target_line = loc->first.line;
 
     while (*cursor) {
         if (*cursor == '\n') {
@@ -340,22 +335,14 @@ static void scan_for_pragma_topic(const idl_pstate_t* pstate, const idl_struct_t
             char* ptr = line;
             while (*ptr == ' ' || *ptr == '\t') ptr++;
             if (strncmp(ptr, "#pragma topic", 13) == 0) {
-                // Determine if this pragma applies to our struct.
-                // It should be on a line < target_line.
-                // And ideally, there shouldn't be another struct in between.
-                // For now, let's assume the closest preceding pragma topic is the one.
-                if (current_line < target_line) {
-                   if (last_pragma_topic) idl_free(last_pragma_topic);
-                   last_pragma_topic = idl_strdup(ptr + 13);
-                }
+                 // Check if this pragma is AFTER the struct
+                 if (current_line > struct_end_line) {
+                     last_pragma_topic = idl_strdup(ptr + 13);
+                     free(line);
+                     break; // Found the one immediately following
+                 }
             }
             
-            // Optimization: stop if we passed the struct
-            if (current_line > target_line) {
-                free(line);
-                break; 
-            }
-
             free(line);
             line_start = cursor + 1;
             current_line++;
@@ -363,9 +350,21 @@ static void scan_for_pragma_topic(const idl_pstate_t* pstate, const idl_struct_t
         cursor++;
     }
     
-    // If we are at the end and no newline
-    if (!*cursor && cursor > line_start && current_line < target_line) {
-         // handle last line if needed, but pragma should be on its own line
+    // Check last line if no newline at EOF
+    if (!last_pragma_topic && !*cursor && cursor > line_start) {
+         size_t len = cursor - line_start;
+         char* line = malloc(len + 1);
+         strncpy(line, line_start, len);
+         line[len] = '\0';
+         
+         char* ptr = line;
+         while (*ptr == ' ' || *ptr == '\t') ptr++;
+         if (strncmp(ptr, "#pragma topic", 13) == 0) {
+              if (current_line > struct_end_line) {
+                  last_pragma_topic = idl_strdup(ptr + 13);
+              }
+         }
+         free(line);
     }
 
     if (last_pragma_topic) {
