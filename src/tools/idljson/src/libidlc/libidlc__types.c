@@ -190,8 +190,8 @@ emit_field(
       
       if (idl_is_declarator(node)) {
           const idl_declarator_t *decl = (const idl_declarator_t *)node;
+          member->member_id = decl->id.value;
           if (decl->id.annotation) {
-              member->member_id = decl->id.value;
               member->has_explicit_id = 1;
           }
       }
@@ -288,6 +288,7 @@ emit_field(
 }
 
 
+
 // Helper to parse QoS string values
 static void parse_qos_value(const char* token, dm_qos_t* qos) {
     if (strcmp(token, "reliable") == 0 || strcmp(token, "best_effort") == 0) {
@@ -321,59 +322,54 @@ static void scan_for_pragma_topic(const idl_pstate_t* pstate, const idl_struct_t
     
     char* cursor = pstate->buffer.data;
     char* line_start = cursor;
-    char* last_pragma_topic = NULL;
     int current_line = 1;
 
     while (*cursor) {
-        if (*cursor == '\n') {
-            size_t len = cursor - line_start;
-            char* line = malloc(len + 1);
-            strncpy(line, line_start, len);
-            line[len] = '\0';
+        if (*cursor == '\n') { // End of line
+            // Process the line we just passed
             
-            // Check if line starts with #pragma topic
-            char* ptr = line;
-            while (*ptr == ' ' || *ptr == '\t') ptr++;
-            if (strncmp(ptr, "#pragma topic", 13) == 0) {
-                 // Check if this pragma is AFTER the struct
-                 if (current_line > struct_end_line) {
-                     last_pragma_topic = idl_strdup(ptr + 13);
-                     free(line);
-                     break; // Found the one immediately following
-                 }
+            // Check current line number
+            if (current_line > struct_end_line) {
+                // Check if line contains #pragma topic
+                // Skip leading whitespace
+                char* ptr = line_start;
+                while (ptr < cursor && (*ptr == ' ' || *ptr == '\t')) ptr++;
+                
+                if (ptr < cursor && *ptr == '#') {
+                    ptr++;
+                    while (ptr < cursor && (*ptr == ' ' || *ptr == '\t')) ptr++;
+                    if (ptr + 6 <= cursor && strncmp(ptr, "pragma", 6) == 0) {
+                        ptr += 6;
+                        while (ptr < cursor && (*ptr == ' ' || *ptr == '\t')) ptr++;
+                        if (ptr + 5 <= cursor && strncmp(ptr, "topic", 5) == 0) {
+                             ptr += 5;
+                             // Found it! extract rest of line
+                             char* eol = cursor;
+                             // Trim trailing whitespace/cr
+                             while (eol > ptr && (*(eol-1) == ' ' || *(eol-1) == '\t' || *(eol-1) == '\r')) eol--;
+                             
+                             size_t val_len = eol - ptr;
+                             char* val = malloc(val_len + 1);
+                             strncpy(val, ptr, val_len);
+                             val[val_len] = '\0';
+                             
+                             // Parse tokens
+                             char* token = strtok(val, " \t");
+                             while (token) {
+                                 parse_qos_value(token, qos);
+                                 token = strtok(NULL, " \t");
+                             }
+                             free(val);
+                             // return; // Continue scanning for more pragmas
+                        }
+                    }
+                }
             }
             
-            free(line);
             line_start = cursor + 1;
             current_line++;
         }
         cursor++;
-    }
-    
-    // Check last line if no newline at EOF
-    if (!last_pragma_topic && !*cursor && cursor > line_start) {
-         size_t len = cursor - line_start;
-         char* line = malloc(len + 1);
-         strncpy(line, line_start, len);
-         line[len] = '\0';
-         
-         char* ptr = line;
-         while (*ptr == ' ' || *ptr == '\t') ptr++;
-         if (strncmp(ptr, "#pragma topic", 13) == 0) {
-              if (current_line > struct_end_line) {
-                  last_pragma_topic = idl_strdup(ptr + 13);
-              }
-         }
-         free(line);
-    }
-
-    if (last_pragma_topic) {
-        char* token = strtok(last_pragma_topic, " \t\r\n");
-        while (token) {
-            parse_qos_value(token, qos);
-            token = strtok(NULL, " \t\r\n");
-        }
-        idl_free(last_pragma_topic);
     }
 }
 
@@ -392,6 +388,7 @@ static dm_qos_t* extract_qos(const idl_pstate_t* pstate, const idl_struct_t* s) 
     
     return qos;
 }
+
 
 static idl_retcode_t
 emit_struct(
@@ -535,12 +532,6 @@ emit_union(
     return IDL_RETCODE_NO_MEMORY;
 
   if (revisit) {
-    if (dm_last_struct) {
-        printf("DEBUG: emit_union revisit dm_last_struct=%p name=%s\n", dm_last_struct, dm_last_struct->c_name);
-    } else {
-        printf("DEBUG: emit_union revisit dm_last_struct is NULL\n");
-    }
-
     if (dm_last_struct && strcmp(dm_last_struct->c_name, name) == 0) {
       dm_calculate_layout(dm_last_struct);
       dm_last_struct = NULL;
@@ -553,7 +544,7 @@ emit_union(
       return IDL_RETCODE_NO_MEMORY;
 
     /* FIXME: idl_is_topic(node) check disabled due to crash in tests */
-    if (0 /* idl_is_topic(node, (pstate->config.flags & IDL_FLAG_KEYLIST) != 0) */) {
+    if (idl_is_topic(node, (pstate->config.flags & IDL_FLAG_KEYLIST) != 0)) {
       if (gen->config.export_macro && idl_fprintf(gen->header.handle, "%1$s ", gen->config.export_macro) < 0)
         return IDL_RETCODE_NO_MEMORY;
       fmt = "extern const dds_topic_descriptor_t %1$s_desc;\n"

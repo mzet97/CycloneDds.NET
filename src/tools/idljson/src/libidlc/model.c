@@ -82,7 +82,7 @@ static size_t get_primitive_size_align(const char* type_name) {
     if (strcmp(type_name, "unsigned long long") == 0) return 8;
     if (strcmp(type_name, "float") == 0) return 4;
     if (strcmp(type_name, "double") == 0) return 8;
-    if (strcmp(type_name, "long double") == 0) return 16;
+    if (strcmp(type_name, "long double") == 0) return sizeof(long double);
     if (strcmp(type_name, "string") == 0) return 8; // pointer
     if (strcmp(type_name, "wstring") == 0) return 8; // pointer
     
@@ -98,11 +98,67 @@ static uint32_t align_up(uint32_t offset, size_t alignment) {
 void dm_calculate_layout(dm_rec_t* struct_rec) {
     if (!struct_rec || !struct_rec->members) return;
     
+    int is_union = (struct_rec->kind && strcmp(struct_rec->kind, "union") == 0);
+
+    if (is_union) {
+        size_t disc_size = 4;
+        size_t disc_align = 4;
+        uint32_t union_max_align = 1;
+        uint32_t max_payload_size = 0;
+        
+        // Pass 1: Calc sizes and max align
+        for (dm_rec_t* member = struct_rec->members; member != NULL; member = member->next) {
+            size_t member_size = 0;
+            size_t member_align = 1;
+            
+            // Check primitive types
+            size_t prim_size = get_primitive_size_align(member->type);
+            
+            if (prim_size > 0) {
+                member_size = prim_size;
+                member_align = (prim_size >= 8) ? 8 : prim_size;
+            } else {
+                // Complex type - lookup
+                dm_rec_t* nested = dm_find_by_c_name(dm_types, member->type);
+                if (!nested) nested = dm_find_by_name(dm_types, member->type);
+                
+                if (nested && nested->size > 0) {
+                    member_size = nested->size;
+                    member_align = nested->align;
+                } else if ((member->kind && strcmp(member->kind, "sequence") == 0) || (member->type && strstr(member->type, "sequence"))) {
+                    member_size = 24;
+                    member_align = 8;
+                } else {
+                    member_size = 4;
+                    member_align = 4;
+                }
+            }
+            
+            if (member->is_array && member->size > 0) {
+                member_size *= member->size;
+            }
+
+            if (member_align > union_max_align) union_max_align = member_align;
+            if (member_size > max_payload_size) max_payload_size = member_size;
+            
+            // temporary store align if needed, but we re-calc or just use offset
+        }
+
+        uint32_t payload_offset = align_up((uint32_t)disc_size, union_max_align);
+        
+        for (dm_rec_t* member = struct_rec->members; member != NULL; member = member->next) {
+            member->offset = payload_offset;
+        }
+
+        uint32_t total_align = (disc_align > union_max_align) ? (uint32_t)disc_align : union_max_align;
+        struct_rec->size = align_up(payload_offset + max_payload_size, total_align);
+        struct_rec->align = total_align;
+        return;
+    }
+    
     uint32_t cursor = 0;
     uint32_t max_align = 1;
     uint32_t union_max_size = 0;
-    
-    int is_union = (struct_rec->kind && strcmp(struct_rec->kind, "union") == 0);
     
     for (dm_rec_t* member = struct_rec->members; member != NULL; member = member->next) {
         size_t member_size = 0;
@@ -116,7 +172,8 @@ void dm_calculate_layout(dm_rec_t* struct_rec) {
             member_align = (prim_size >= 8) ? 8 : prim_size;
         } else {
             // Complex type - lookup
-            dm_rec_t* nested = dm_find_by_name(dm_types, member->type);
+            dm_rec_t* nested = dm_find_by_c_name(dm_types, member->type);
+            if (!nested) nested = dm_find_by_name(dm_types, member->type);
             
             if (nested && nested->size > 0) {
                 member_size = nested->size;
@@ -139,23 +196,11 @@ void dm_calculate_layout(dm_rec_t* struct_rec) {
         }
         
         // Apply padding
-        if (!is_union) {
-            cursor = align_up(cursor, member_align);
-        } else {
-            cursor = 0;  // Union members overlay
-        }
+        cursor = align_up(cursor, member_align);
         
         member->offset = cursor;
         
-        if (!is_union) {
-            cursor += member_size;
-        } else {
-            if (member_size > union_max_size) union_max_size = member_size;
-            // cursor tracks max size for union? No, cursor is used for offset for NEXT.
-            // But for union, offset is always 0 (handled above).
-            // So we just track max size.
-            cursor = union_max_size;
-        }
+        cursor += member_size;
         
         if (member_align > max_align) {
             max_align = member_align;
@@ -185,8 +230,20 @@ int dm_get_member_offset(const char* type_c_name, const char* member_name) {
     int current_offset = 0;
     
     while (token != NULL) {
+        if (current_type->kind && strcmp(current_type->kind, "union") == 0) {
+            if (strcmp(token, "_u") == 0) {
+                token = strtok_s(NULL, ".", &saveptr);
+                continue;
+            }
+        }
+
         dm_rec_t* member = find_member_by_name(current_type, token);
         if (!member) {
+             if (strcmp(token, "_d") == 0) {
+                 // Discriminator is at offset 0 relative to the union container
+                 free(path_copy);
+                 return current_offset;
+             }
             free(path_copy);
             return 0;
         }
@@ -196,7 +253,9 @@ int dm_get_member_offset(const char* type_c_name, const char* member_name) {
         token = strtok_s(NULL, ".", &saveptr);
         if (token) {
             // Navigate to member's type
-            current_type = dm_find_by_name(dm_types, member->type);
+            current_type = dm_find_by_c_name(dm_types, member->type);
+            if (!current_type) current_type = dm_find_by_name(dm_types, member->type);
+            
             if (!current_type) {
                 free(path_copy);
                 return 0;

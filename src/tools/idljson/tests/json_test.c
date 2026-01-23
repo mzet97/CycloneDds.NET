@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "idl/string.h"
+#include "idl/processor.h"
 #include "libidlc/libidlc__descriptor.h"
 #include "libidlc/libidlc__types.h"
 #include "libidlc/libidlc__generator.h"
@@ -33,14 +34,19 @@ static idl_retcode_t run_json_generation(const char* idl) {
     
     idl_retcode_t ret = idl_create_pstate (flags, NULL, &pstate);
     if (ret != IDL_RETCODE_OK) {
-        printf("DEBUG: Failed to create pstate: %d\n", ret);
         return ret;
     }
     
     ret = idl_parse_string(pstate, idl);
     if (ret != IDL_RETCODE_OK) {
-        printf("DEBUG: Failed to parse string: %d\n", ret);
         return ret;
+    }
+    
+    // Manually populate buffer for QoS scanning as idl_parse_string might not set it
+    if (pstate->buffer.data == NULL) {
+        pstate->buffer.data = idl_strdup(idl);
+        pstate->buffer.size = strlen(idl);
+        pstate->buffer.used = strlen(idl);
     }
     
     // Setup dummy handle
@@ -51,10 +57,10 @@ static idl_retcode_t run_json_generation(const char* idl) {
     #endif
     
     if (!gen.header.handle) {
-        printf("DEBUG: Failed to open nul device\n");
         idl_delete_pstate(pstate);
         return IDL_RETCODE_NO_MEMORY; 
     }
+    gen.source.handle = gen.header.handle;
     
     dm_sources = dm_new();
     dm_sources->name = idl_strdup("test.idl");
@@ -127,7 +133,6 @@ CU_Test(json_model, metadata_extraction) {
     dm_rec_t* y = dm_find_by_name(un->members, "y");
     CU_ASSERT_FATAL(y != NULL);
     CU_ASSERT(y->labels != NULL);
-    // printf("DEBUG: Label y: %s\n", y->labels->name);
     CU_ASSERT_FATAL(strcmp(y->labels->name, "2") == 0);
 }
 

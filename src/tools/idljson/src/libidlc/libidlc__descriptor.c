@@ -1865,8 +1865,9 @@ static int print_opcodes(FILE *fp, const struct descriptor *descriptor, uint32_t
   uint32_t cnt = 0;
   const char *str;
 
-  if (IDL_PRINTA(&type, print_type, descriptor->topic) < 0)
+  if (IDL_PRINTA(&type, print_type, descriptor->topic) < 0) {
     return -1;
+  }
 
   str = "#if defined(_MSC_VER) && (_MSC_VER > 1943)\n" \
         "__pragma(warning(push))\n"
@@ -2972,6 +2973,31 @@ err:
   return ret;
 }
 
+
+static uint32_t resolve_constant_value(const char* value_str) {
+    // 1. Try parsing as number
+    char* end;
+    uint32_t val = (uint32_t)strtoul(value_str, &end, 0);
+    if (end > value_str && *end == '\0') {
+        return val;
+    }
+
+    // 2. Try looking up in Data Model (Enums)
+    // Iterate all types, if enum, iterate members
+    for (dm_rec_t* t = dm_types; t; t = t->next) {
+        if (t->kind && strcmp(t->kind, "enum") == 0) {
+            for (dm_rec_t* m = t->members; m; m = m->next) {
+                // value_str might be "E_1" or "Color::RED" (depends on print_constant)
+                // stash_constant usually stores just the identifier name for Enums
+                if (m->name && strcmp(m->name, value_str) == 0) {
+                    return (uint32_t)m->value.uint64;
+                }
+            }
+        }
+    }
+    return 0; // Failed
+}
+
 static void extract_descriptor_to_model(struct descriptor *descriptor, dm_rec_t *rec) {
     // 1. Keys
     rec->topic_descriptor = (dm_descriptor_t*)calloc(1, sizeof(dm_descriptor_t));
@@ -3020,7 +3046,7 @@ static void extract_descriptor_to_model(struct descriptor *descriptor, dm_rec_t 
                      }
                      break;
                  case CONSTANT:
-                     dd->ops[idx++] = (uint32_t)strtoul(inst->data.constant.value, NULL, 0);
+                     dd->ops[idx++] = resolve_constant_value(inst->data.constant.value);
                      break;
                  case COUPLE:
                      dd->ops[idx++] = inst->data.couple.high; 
@@ -3048,6 +3074,7 @@ static void extract_descriptor_to_model(struct descriptor *descriptor, dm_rec_t 
     }
     
     // Key Offsets Loop
+
     for (size_t op = 0; op < descriptor->key_offsets.count; op++) {
         struct instruction *inst = &descriptor->key_offsets.table[op];
         switch(inst->type) {
