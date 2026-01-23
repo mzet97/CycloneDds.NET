@@ -3785,7 +3785,7 @@ static bool normalize_bitmask (char * restrict data, uint32_t * restrict off, ui
 }
 
 ddsrt_attribute_warn_unused_result ddsrt_nonnull_all
-static bool normalize_string (char * restrict data, uint32_t * restrict off, uint32_t size, bool bswap, size_t maxsz)
+static bool normalize_string (char * restrict data, uint32_t * restrict off, uint32_t size, bool bswap, size_t maxsz, uint32_t xcdr_version)
 {
   // maxsz = character count, includes terminating '\0' that is in-memory and on the wire
   uint32_t sz;
@@ -3797,7 +3797,7 @@ static bool normalize_string (char * restrict data, uint32_t * restrict off, uin
     printf("[native] normalize_string: bound check failed. sz=%u left=%u maxsz=%zu\n", sz, size - *off, maxsz);
     return normalize_error_bool ();
   }
-  if (data[*off + sz - 1] != 0) {
+  if (sz > 0 && data[*off + sz - 1] != 0) {
     printf("[native] normalize_string: NUL check failed. val=%d\n", (int)data[*off + sz - 1]);
     return normalize_error_bool ();
   }
@@ -4090,7 +4090,7 @@ static const uint32_t *normalize_seq (char * restrict data, uint32_t * restrict 
     case DDS_OP_VAL_STR: case DDS_OP_VAL_BST: {
       const size_t maxsz = (subtype == DDS_OP_VAL_STR) ? SIZE_MAX : ops[2 + bound_op];
       for (uint32_t i = 0; i < num; i++)
-        if (!normalize_string (data, off, size1, bswap, maxsz))
+        if (!normalize_string (data, off, size1, bswap, maxsz, xcdr_version))
           return NULL;
       ops += (subtype == DDS_OP_VAL_STR ? 2 : 3) + bound_op;
       break;
@@ -4163,7 +4163,7 @@ static const uint32_t *normalize_arr (char * restrict data, uint32_t * restrict 
     case DDS_OP_VAL_STR: case DDS_OP_VAL_BST: {
       const size_t maxsz = (subtype == DDS_OP_VAL_STR) ? SIZE_MAX : ops[4];
       for (uint32_t i = 0; i < num; i++)
-        if (!normalize_string (data, off, size1, bswap, maxsz))
+        if (!normalize_string (data, off, size1, bswap, maxsz, xcdr_version))
           return NULL;
       ops += (subtype == DDS_OP_VAL_STR) ? 3 : 5;
       break;
@@ -4263,7 +4263,7 @@ static const uint32_t *normalize_uni (char * restrict data, uint32_t * restrict 
       case DDS_OP_VAL_4BY: if (!normalize_uint32 (data, off, size, bswap)) return NULL; break;
       case DDS_OP_VAL_8BY: if (!normalize_uint64 (data, off, size, bswap, xcdr_version)) return NULL; break;
       case DDS_OP_VAL_WCHAR: if (!normalize_wchar (data, off, size, bswap)) return NULL; break;
-      case DDS_OP_VAL_STR: if (!normalize_string (data, off, size, bswap, SIZE_MAX)) return NULL; break;
+      case DDS_OP_VAL_STR: if (!normalize_string (data, off, size, bswap, SIZE_MAX, xcdr_version)) return NULL; break;
       case DDS_OP_VAL_WSTR: if (!normalize_wstring (data, off, size, bswap, SIZE_MAX)) return NULL; break;
       case DDS_OP_VAL_ENU: if (!normalize_enum (data, off, size, bswap, jeq_op[0], jeq_op[3])) return NULL; break;
       case DDS_OP_VAL_BST: case DDS_OP_VAL_BWSTR: case DDS_OP_VAL_SEQ: case DDS_OP_VAL_BSQ: case DDS_OP_VAL_ARR: case DDS_OP_VAL_UNI: case DDS_OP_VAL_STU: case DDS_OP_VAL_BMK:
@@ -4423,9 +4423,9 @@ static const uint32_t *stream_normalize_adr_impl (uint32_t insn, char * restrict
     case DDS_OP_VAL_2BY: if (!normalize_uint16 (data, off, size, bswap)) return NULL; ops += 2; break;
     case DDS_OP_VAL_4BY: if (!normalize_uint32 (data, off, size, bswap)) return NULL; ops += 2; break;
     case DDS_OP_VAL_8BY: if (!normalize_uint64 (data, off, size, bswap, xcdr_version)) return NULL; ops += 2; break;
-    case DDS_OP_VAL_STR: if (!normalize_string (data, off, size, bswap, SIZE_MAX)) return NULL; ops += 2; break;
+    case DDS_OP_VAL_STR: if (!normalize_string (data, off, size, bswap, SIZE_MAX, xcdr_version)) return NULL; ops += 2; break;
     case DDS_OP_VAL_WSTR: if (!normalize_wstring (data, off, size, bswap, SIZE_MAX)) return NULL; ops += 2; break;
-    case DDS_OP_VAL_BST: if (!normalize_string (data, off, size, bswap, ops[2])) return NULL; ops += 3; break;
+    case DDS_OP_VAL_BST: if (!normalize_string (data, off, size, bswap, ops[2], xcdr_version)) return NULL; ops += 3; break;
     case DDS_OP_VAL_BWSTR: if (!normalize_wstring (data, off, size, bswap, ops[2])) return NULL; ops += 3; break;
     case DDS_OP_VAL_WCHAR: if (!normalize_wchar (data, off, size, bswap)) return NULL; ops += 2; break;
     case DDS_OP_VAL_SEQ: case DDS_OP_VAL_BSQ: ops = normalize_seq (data, off, size, bswap, xcdr_version, mid_table, ops, insn, cdr_kind); if (!ops) return NULL; break;
@@ -4849,9 +4849,9 @@ static bool stream_normalize_key_impl (void * restrict data, uint32_t size, uint
     case DDS_OP_VAL_ENU: if (!normalize_enum (data, offs, size, bswap, insn, ops[2])) return false; break;
     case DDS_OP_VAL_BMK: if (!normalize_bitmask (data, offs, size, bswap, xcdr_version, insn, ops[2], ops[3])) return false; break;
     case DDS_OP_VAL_8BY: if (!normalize_uint64 (data, offs, size, bswap, xcdr_version)) return false; break;
-    case DDS_OP_VAL_STR: if (!normalize_string (data, offs, size, bswap, SIZE_MAX)) return false; break;
+    case DDS_OP_VAL_STR: if (!normalize_string (data, offs, size, bswap, SIZE_MAX, xcdr_version)) return false; break;
     case DDS_OP_VAL_WSTR: if (!normalize_wstring (data, offs, size, bswap, SIZE_MAX)) return false; break;
-    case DDS_OP_VAL_BST: if (!normalize_string (data, offs, size, bswap, ops[2])) return false; break;
+    case DDS_OP_VAL_BST: if (!normalize_string (data, offs, size, bswap, ops[2], xcdr_version)) return false; break;
     case DDS_OP_VAL_BWSTR: if (!normalize_wstring (data, offs, size, bswap, ops[2])) return false; break;
     case DDS_OP_VAL_WCHAR: if (!normalize_wchar (data, offs, size, bswap)) return false; break;
     case DDS_OP_VAL_ARR: if (!normalize_arr (data, offs, size, bswap, xcdr_version, mid_table, ops, insn, true)) return false; break;
