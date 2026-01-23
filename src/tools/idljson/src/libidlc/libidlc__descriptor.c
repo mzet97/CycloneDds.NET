@@ -3049,15 +3049,13 @@ static void extract_descriptor_to_model(struct descriptor *descriptor, dm_rec_t 
                      dd->ops[idx++] = resolve_constant_value(inst->data.constant.value);
                      break;
                  case COUPLE:
-                     dd->ops[idx++] = inst->data.couple.high; 
-                     dd->ops[idx++] = inst->data.couple.low; 
+                     dd->ops[idx++] = ((inst->data.couple.high & 0xffffu) << 16) | (inst->data.couple.low & 0xffffu);
                      break;
                  case SINGLE:
                      dd->ops[idx++] = inst->data.single;
                      break;
                  case ELEM_OFFSET:
-                     dd->ops[idx++] = (inst->data.inst_offset.inst.high & 0xffffu);
-                     dd->ops[idx++] = (uint16_t)inst->data.inst_offset.elem_offs;
+                     dd->ops[idx++] = ((inst->data.inst_offset.inst.high & 0xffffu) << 16) | (uint16_t)inst->data.inst_offset.elem_offs;
                      break;
                  case JEQ_OFFSET:
                      dd->ops[idx++] = (inst->data.inst_offset.inst.opcode & (DDS_OP_MASK | DDS_OP_TYPE_FLAGS_MASK | DDS_OP_TYPE_MASK)) | (uint16_t)inst->data.inst_offset.elem_offs;

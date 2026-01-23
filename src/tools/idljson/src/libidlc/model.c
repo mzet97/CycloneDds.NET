@@ -163,6 +163,12 @@ void dm_calculate_layout(dm_rec_t* struct_rec) {
         if (prim_size > 0) {
             member_size = prim_size;
             member_align = (prim_size >= 8) ? 8 : prim_size;
+            
+            // Handle C-mapping of bounded strings (char array)
+            if (strcmp(member->type, "string") == 0 && member->bound > 0) {
+                member_size = member->bound + 1;
+                member_align = 1;
+            }
         } else {
             dm_rec_t* nested = dm_find_by_c_name(dm_types, member->type);
             if (!nested) nested = dm_find_by_name(dm_types, member->type);
@@ -391,9 +397,9 @@ static void dm_print_descriptor(FILE* fh, dm_descriptor_t* desc, int indent) {
     fprintf(fh, "},\n");
 }
 
-static void dm_print_list(FILE* fh, dm_rec_t* list, int indent);
+static void dm_print_list(FILE* fh, dm_rec_t* list, int indent, int is_member);
 
-static void dm_print_rec(FILE* fh, dm_rec_t* rec, int indent) {
+static void dm_print_rec(FILE* fh, dm_rec_t* rec, int indent, int is_member) {
     if (!rec) return;
     
     dm_indent(fh, indent);
@@ -451,6 +457,21 @@ static void dm_print_rec(FILE* fh, dm_rec_t* rec, int indent) {
         fprintf(fh, "\"Bound\": %u,\n", rec->bound);
     }
     
+    if (rec->align > 0) {
+        dm_indent(fh, indent + 1);
+        fprintf(fh, "\"Align\": %d,\n", rec->align);
+    }
+    
+    if (!rec->is_array && rec->size > 0) {
+        dm_indent(fh, indent + 1);
+        fprintf(fh, "\"Size\": %d,\n", rec->size);
+    }
+    
+    if (is_member) {
+         dm_indent(fh, indent + 1);
+         fprintf(fh, "\"Offset\": %d,\n", rec->offset);
+    }
+
     if (rec->is_array) {
         dm_indent(fh, indent + 1);
         fprintf(fh, "\"CollectionType\": \"array\",\n");
@@ -487,7 +508,7 @@ static void dm_print_rec(FILE* fh, dm_rec_t* rec, int indent) {
     if (rec->members) {
         dm_indent(fh, indent + 1);
         fprintf(fh, "\"Members\":\n");
-        dm_print_list(fh, rec->members, indent + 1);
+        dm_print_list(fh, rec->members, indent + 1, 1);
         fprintf(fh, ",\n");
     }
     
@@ -499,7 +520,7 @@ static void dm_print_rec(FILE* fh, dm_rec_t* rec, int indent) {
     fprintf(fh, "}");
 }
 
-static void dm_print_list(FILE* fh, dm_rec_t* list, int indent) {
+static void dm_print_list(FILE* fh, dm_rec_t* list, int indent, int is_member) {
     if (!list) {
         fprintf(fh, "null"); 
         return; 
@@ -509,7 +530,7 @@ static void dm_print_list(FILE* fh, dm_rec_t* list, int indent) {
     fprintf(fh, "[\n");
     
     for (dm_rec_t* rec = list; rec != NULL; rec = rec->next) {
-        dm_print_rec(fh, rec, indent + 1);
+        dm_print_rec(fh, rec, indent + 1, is_member);
         if (rec->next) fprintf(fh, ",");
         fprintf(fh, "\n");
     }
@@ -521,9 +542,9 @@ static void dm_print_list(FILE* fh, dm_rec_t* list, int indent) {
 void dm_fprint(FILE* fh) {
     fprintf(fh, "{\n");
     fprintf(fh, "  \"File\":\n");
-    dm_print_list(fh, dm_sources, 2);
+    dm_print_list(fh, dm_sources, 2, 0);
     fprintf(fh, ",\n");
     fprintf(fh, "  \"Types\":\n");
-    dm_print_list(fh, dm_types, 2);
+    dm_print_list(fh, dm_types, 2, 0);
     fprintf(fh, "\n}\n");
 }
