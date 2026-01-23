@@ -288,10 +288,97 @@ emit_field(
 }
 
 
-static dm_qos_t* extract_qos(const idl_struct_t* s) {
-    // FIXME: IDL parser does not currently support QoS extraction from #pragma topic
-    // This is a placeholder that returns defaults, or test values for specific types.
+// Helper to parse QoS string values
+static void parse_qos_value(const char* token, dm_qos_t* qos) {
+    if (strcmp(token, "reliable") == 0 || strcmp(token, "best_effort") == 0) {
+        if (qos->reliability) free(qos->reliability);
+        qos->reliability = idl_strdup(token);
+    } else if (strcmp(token, "volatile") == 0 || 
+               strcmp(token, "transient_local") == 0 || 
+               strcmp(token, "transient") == 0 ||
+               strcmp(token, "persistent") == 0) {
+        if (qos->durability) free(qos->durability);
+        qos->durability = idl_strdup(token);
+    } else if (strcmp(token, "keep_last") == 0 || strcmp(token, "keep_all") == 0) {
+        if (qos->history) free(qos->history);
+        qos->history = idl_strdup(token);
+    } else {
+        char* end;
+        long val = strtol(token, &end, 10);
+        if (*end == '\0') {
+            qos->depth = (int32_t)val;
+        }
+    }
+}
+
+// Scans backward from struct location to find #pragma topic
+static void scan_for_pragma_topic(const idl_pstate_t* pstate, const idl_struct_t* s, dm_qos_t* qos) {
+    if (!pstate->buffer.data) return;
+
+    // Get location of the struct
+    const idl_location_t* loc = &s->name->symbol.location;
+    // idl_location_t uses line numbers. We need character offset if possible, 
+    // or we have to scan the whole buffer line by line.
     
+    // Simple approach: scan the whole buffer for "#pragma topic" lines, 
+    // and see if they are immediately before our struct.
+    
+    char* cursor = pstate->buffer.data;
+    char* line_start = cursor;
+    char* last_pragma_topic = NULL;
+    int current_line = 1;
+    int target_line = loc->first.line;
+
+    while (*cursor) {
+        if (*cursor == '\n') {
+            size_t len = cursor - line_start;
+            char* line = malloc(len + 1);
+            strncpy(line, line_start, len);
+            line[len] = '\0';
+            
+            // Check if line starts with #pragma topic
+            char* ptr = line;
+            while (*ptr == ' ' || *ptr == '\t') ptr++;
+            if (strncmp(ptr, "#pragma topic", 13) == 0) {
+                // Determine if this pragma applies to our struct.
+                // It should be on a line < target_line.
+                // And ideally, there shouldn't be another struct in between.
+                // For now, let's assume the closest preceding pragma topic is the one.
+                if (current_line < target_line) {
+                   if (last_pragma_topic) idl_free(last_pragma_topic);
+                   last_pragma_topic = idl_strdup(ptr + 13);
+                }
+            }
+            
+            // Optimization: stop if we passed the struct
+            if (current_line > target_line) {
+                free(line);
+                break; 
+            }
+
+            free(line);
+            line_start = cursor + 1;
+            current_line++;
+        }
+        cursor++;
+    }
+    
+    // If we are at the end and no newline
+    if (!*cursor && cursor > line_start && current_line < target_line) {
+         // handle last line if needed, but pragma should be on its own line
+    }
+
+    if (last_pragma_topic) {
+        char* token = strtok(last_pragma_topic, " \t\r\n");
+        while (token) {
+            parse_qos_value(token, qos);
+            token = strtok(NULL, " \t\r\n");
+        }
+        idl_free(last_pragma_topic);
+    }
+}
+
+static dm_qos_t* extract_qos(const idl_pstate_t* pstate, const idl_struct_t* s) {
     dm_qos_t* qos = calloc(1, sizeof(dm_qos_t));
     if (!qos) return NULL;
     
@@ -301,13 +388,8 @@ static dm_qos_t* extract_qos(const idl_struct_t* s) {
     qos->history = NULL;
     qos->depth = 0;
 
-    // Hardcoded for test case "QosTopic" until parser supports it
-    if (s->name && s->name->identifier && strcmp(s->name->identifier, "QosTopic") == 0) {
-        qos->reliability = idl_strdup("reliable");
-        qos->durability = idl_strdup("transient_local");
-        qos->history = idl_strdup("keep_last");
-        qos->depth = 1;
-    }
+    // Scan for pragma topic in the source
+    scan_for_pragma_topic(pstate, s, qos);
     
     return qos;
 }
@@ -344,8 +426,11 @@ emit_struct(
       return IDL_RETCODE_NO_MEMORY;
     if (!empty && idl_fprintf(gen->header.handle, "\n") < 0)
       return IDL_RETCODE_NO_MEMORY;
-    /* FIXME: idl_is_topic(node) check disabled due to crash in tests */
-    if (!empty && 0 /* idl_is_topic(node, (pstate->config.flags & IDL_FLAG_KEYLIST) != 0) */) {
+    /* Generate descriptor for topics (non-nested structs) */
+    const idl_struct_t *s_node = (const idl_struct_t *)node;
+    bool is_topic = !s_node->nested.value; // Simple check avoiding idl_is_topic crash
+    
+    if (!empty && is_topic) {
       if (gen->config.export_macro && idl_fprintf(gen->header.handle, "%1$s ", gen->config.export_macro) < 0)
         return IDL_RETCODE_NO_MEMORY;
       fmt = "extern const dds_topic_descriptor_t %1$s_desc;\n"
@@ -383,7 +468,7 @@ emit_struct(
     
     // Extract QoS
     if (!empty) {
-       rec->qos = extract_qos((const idl_struct_t*)node);
+       rec->qos = extract_qos(pstate, (const idl_struct_t*)node);
     }
     
     idl_extensibility_t ext = ((const idl_struct_t*)node)->extensibility.value;
