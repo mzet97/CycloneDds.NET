@@ -842,7 +842,7 @@ CU_Test(idlc_type_meta, type_obj_serdes)
     {
       struct ddsi_typeid_str tidstr;
       const char *type_name = idl_identifier(tm->node);
-      printf ("test type %s %s\n", type_name ? type_name : "<anonymous>", ddsi_make_typeid_str_impl (&tidstr, tm->ti_complete));
+      // printf ("test type %s %s\n", type_name ? type_name : "<anonymous>", ddsi_make_typeid_str_impl (&tidstr, tm->ti_complete));
 
       // serialize the generated type object
       dds_ostreamLE_t os;

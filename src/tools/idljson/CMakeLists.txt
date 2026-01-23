@@ -12,14 +12,6 @@
 include(GenerateExportHeader)
 configure_file(src/idlc/config.h.in config.h)
 
-set(headers
-  include/idlc/generator.h
-  ${CMAKE_CURRENT_BINARY_DIR}/config.h)
-  
-
-
-
-
 set(
   libidljson_hdrs
   include/libidlc/libidlc_generator.h
