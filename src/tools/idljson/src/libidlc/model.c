@@ -101,53 +101,48 @@ void dm_calculate_layout(dm_rec_t* struct_rec) {
     int is_union = (struct_rec->kind && strcmp(struct_rec->kind, "union") == 0);
 
     if (is_union) {
-        size_t disc_size = 4;
+        size_t disc_size = 4; // int32_t _d
         size_t disc_align = 4;
         uint32_t union_max_align = 1;
         uint32_t max_payload_size = 0;
         
-        // Pass 1: Calc sizes and max align
+        // Pass 1: Determine max alignment of payload
         for (dm_rec_t* member = struct_rec->members; member != NULL; member = member->next) {
-            size_t member_size = 0;
             size_t member_align = 1;
+            size_t member_size = 0;
             
-            // Check primitive types
+            // Re-use primitive size logic
             size_t prim_size = get_primitive_size_align(member->type);
-            
             if (prim_size > 0) {
                 member_size = prim_size;
                 member_align = (prim_size >= 8) ? 8 : prim_size;
             } else {
-                // Complex type - lookup
-                dm_rec_t* nested = dm_find_by_c_name(dm_types, member->type);
-                if (!nested) nested = dm_find_by_name(dm_types, member->type);
-                
-                if (nested && nested->size > 0) {
-                    member_size = nested->size;
-                    member_align = nested->align;
-                } else if ((member->kind && strcmp(member->kind, "sequence") == 0) || (member->type && strstr(member->type, "sequence"))) {
-                    member_size = 24;
-                    member_align = 8;
-                } else {
-                    member_size = 4;
-                    member_align = 4;
-                }
+                 dm_rec_t* nested = dm_find_by_c_name(dm_types, member->type);
+                 if (!nested) nested = dm_find_by_name(dm_types, member->type);
+                 if (nested && nested->size > 0) {
+                     member_size = nested->size;
+                     member_align = nested->align;
+                 } else if ((member->kind && strcmp(member->kind, "sequence") == 0) || (member->type && strstr(member->type, "sequence"))) {
+                     member_size = 24; member_align = 8;
+                 } else {
+                     member_size = 4; member_align = 4;
+                 }
             }
-            
-            if (member->is_array && member->size > 0) {
-                member_size *= member->size;
-            }
+            if (member->is_array && member->size > 0) member_size *= member->size;
 
             if (member_align > union_max_align) union_max_align = member_align;
             if (member_size > max_payload_size) max_payload_size = member_size;
             
-            // temporary store align if needed, but we re-calc or just use offset
+            // Store size temporarily or re-calc in pass 2? 
+            // Better to just calculate payload offset now.
         }
 
+        // Calculate offset where the union payload (_u) starts
         uint32_t payload_offset = align_up((uint32_t)disc_size, union_max_align);
         
+        // Pass 2: Set offsets
         for (dm_rec_t* member = struct_rec->members; member != NULL; member = member->next) {
-            member->offset = payload_offset;
+            member->offset = payload_offset; // All start at same offset
         }
 
         uint32_t total_align = (disc_align > union_max_align) ? (uint32_t)disc_align : union_max_align;
@@ -156,22 +151,19 @@ void dm_calculate_layout(dm_rec_t* struct_rec) {
         return;
     }
     
+    // Normal Struct Layout (Existing Logic is fine)
     uint32_t cursor = 0;
     uint32_t max_align = 1;
-    uint32_t union_max_size = 0;
     
     for (dm_rec_t* member = struct_rec->members; member != NULL; member = member->next) {
         size_t member_size = 0;
         size_t member_align = 1;
         
-        // Check primitive types
         size_t prim_size = get_primitive_size_align(member->type);
-        
         if (prim_size > 0) {
             member_size = prim_size;
             member_align = (prim_size >= 8) ? 8 : prim_size;
         } else {
-            // Complex type - lookup
             dm_rec_t* nested = dm_find_by_c_name(dm_types, member->type);
             if (!nested) nested = dm_find_by_name(dm_types, member->type);
             
@@ -179,35 +171,21 @@ void dm_calculate_layout(dm_rec_t* struct_rec) {
                 member_size = nested->size;
                 member_align = nested->align;
             } else if ((member->kind && strcmp(member->kind, "sequence") == 0) || (member->type && strstr(member->type, "sequence"))) {
-                // DDS sequence: {uint32, uint32, T*, bool} = 24 bytes aligned to 8 (approx, arch dependent)
-                // Assuming 64-bit for now as per guide
-                member_size = 24;
-                member_align = 8;
+                member_size = 24; member_align = 8;
             } else {
-                // Assume enum or unknown (4-byte aligned)
-                member_size = 4;
-                member_align = 4;
+                member_size = 4; member_align = 4;
             }
         }
         
-        // Handle arrays
-        if (member->is_array && member->size > 0) {
-            member_size *= member->size;
-        }
+        if (member->is_array && member->size > 0) member_size *= member->size;
         
-        // Apply padding
         cursor = align_up(cursor, member_align);
-        
         member->offset = cursor;
-        
         cursor += member_size;
         
-        if (member_align > max_align) {
-            max_align = member_align;
-        }
+        if (member_align > max_align) max_align = member_align;
     }
     
-    // Final padding
     struct_rec->size = align_up(cursor, max_align);
     struct_rec->align = max_align;
 }

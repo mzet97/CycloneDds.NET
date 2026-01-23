@@ -246,3 +246,38 @@ CU_Test(json_fixes, layout_offsets_and_cname) {
     }
     CU_ASSERT(found_offset_4);
 }
+
+// ===================================================================================
+// TEST 5: Union Layout (Offset Fix)
+// ===================================================================================
+// Issue: Union member offsets were incorrectly set to 0.
+// Fix: They must be offset by the size of the discriminator (rounded up to payload alignment).
+CU_Test(json_fixes, union_layout_calc) {
+    const char* idl = 
+        "union UnionLayout switch(long) {\n"
+        "  case 1: long a;\n"      
+        "  case 2: double b;\n"    
+        "};\n";
+
+    clean_dm();
+    CU_ASSERT_EQ_FATAL(run_json_generation(idl), IDL_RETCODE_OK);
+
+    dm_rec_t* u = dm_find_by_name(dm_types, "UnionLayout");
+    CU_ASSERT_FATAL(u != NULL);
+
+    dm_rec_t* mA = dm_find_by_name(u->members, "a");
+    dm_rec_t* mB = dm_find_by_name(u->members, "b");
+    CU_ASSERT_FATAL(mA != NULL);
+    CU_ASSERT_FATAL(mB != NULL);
+
+    // Discriminator is long (4 bytes).
+    // Payload max align is double (8 bytes).
+    // Payload offset = align_up(4, 8) = 8.
+    
+    CU_ASSERT_EQ(mA->offset, 8);
+    CU_ASSERT_EQ(mB->offset, 8);
+    
+    // Size = align_up(8 + 8, 8) = 16.
+    CU_ASSERT_EQ(u->size, 16);
+    CU_ASSERT_EQ(u->align, 8);
+}
