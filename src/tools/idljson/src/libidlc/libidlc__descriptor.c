@@ -2975,27 +2975,10 @@ err:
 
 
 static uint32_t resolve_constant_value(const char* value_str) {
-    // 1. Try parsing as number
-    char* end;
-    uint32_t val = (uint32_t)strtoul(value_str, &end, 0);
-    if (end > value_str && *end == '\0') {
-        return val;
-    }
-
-    // 2. Try looking up in Data Model (Enums)
-    // Iterate all types, if enum, iterate members
-    for (dm_rec_t* t = dm_types; t; t = t->next) {
-        if (t->kind && strcmp(t->kind, "enum") == 0) {
-            for (dm_rec_t* m = t->members; m; m = m->next) {
-                // value_str might be "E_1" or "Color::RED" (depends on print_constant)
-                // stash_constant usually stores just the identifier name for Enums
-                if (m->name && strcmp(m->name, value_str) == 0) {
-                    return (uint32_t)m->value.uint64;
-                }
-            }
-        }
-    }
-    return 0; // Failed
+    if (!value_str) return 0;
+    if (strcmp(value_str, "true") == 0) return 1;
+    if (strcmp(value_str, "false") == 0) return 0;
+    return (uint32_t)strtoul(value_str, NULL, 0); 
 }
 
 static void extract_descriptor_to_model(struct descriptor *descriptor, dm_rec_t *rec) {
@@ -3041,12 +3024,16 @@ static void extract_descriptor_to_model(struct descriptor *descriptor, dm_rec_t 
                      break;
                  case MEMBER_SIZE:
                      {
-                       dm_rec_t *r = dm_find_by_c_name(dm_types, inst->data.size.type);
-                       dd->ops[idx++] = r ? r->size : 0;
+                         uint32_t sz = 0, al = 0;
+                         resolve_type_size(inst->data.size.type, &sz, &al);
+                         dd->ops[idx++] = sz;
                      }
                      break;
                  case CONSTANT:
-                     dd->ops[idx++] = resolve_constant_value(inst->data.constant.value);
+                     {
+                         uint32_t cval = resolve_constant_value(inst->data.constant.value);
+                         dd->ops[idx++] = cval;
+                     }
                      break;
                  case COUPLE:
                      dd->ops[idx++] = ((inst->data.couple.high & 0xffffu) << 16) | (inst->data.couple.low & 0xffffu);
@@ -3119,8 +3106,9 @@ generate_descriptor(
   struct descriptor descriptor;
   uint32_t kof_offs;
 
-  if ((ret = generate_descriptor_impl(pstate, node, &descriptor)) < 0)
+  if ((ret = generate_descriptor_impl(pstate, node, &descriptor)) < 0) {
     goto err_gen;
+  }
 
   // Extract Logic
   char *c_name = NULL;
@@ -3133,6 +3121,7 @@ generate_descriptor(
 
   if (print_opcodes(generator->source.handle, &descriptor, &kof_offs) < 0)
     { ret = IDL_RETCODE_NO_MEMORY; goto err_print; }
+
   if (print_keys(generator->source.handle, &descriptor, kof_offs) < 0)
     { ret = IDL_RETCODE_NO_MEMORY; goto err_print; }
 #ifdef DDS_HAS_TYPELIB

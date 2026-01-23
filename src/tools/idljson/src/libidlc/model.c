@@ -68,9 +68,10 @@ static dm_rec_t* find_member_by_name(dm_rec_t* type_rec, const char* name) {
     return NULL;
 }
 
-static size_t get_primitive_size_align(const char* type_name) {
+size_t get_primitive_size_align(const char* type_name) {
     if (!type_name) return 0;
     
+    // IDL Types
     if (strcmp(type_name, "boolean") == 0) return 1;
     if (strcmp(type_name, "char") == 0) return 1;
     if (strcmp(type_name, "octet") == 0) return 1;
@@ -82,11 +83,68 @@ static size_t get_primitive_size_align(const char* type_name) {
     if (strcmp(type_name, "unsigned long long") == 0) return 8;
     if (strcmp(type_name, "float") == 0) return 4;
     if (strcmp(type_name, "double") == 0) return 8;
+    
+    // C Mapped Types
+    if (strcmp(type_name, "bool") == 0) return 1;
+    if (strcmp(type_name, "uint8_t") == 0) return 1;
+    if (strcmp(type_name, "int16_t") == 0) return 2;
+    if (strcmp(type_name, "uint16_t") == 0) return 2;
+    if (strcmp(type_name, "int32_t") == 0) return 4;
+    if (strcmp(type_name, "uint32_t") == 0) return 4;
+    if (strcmp(type_name, "int64_t") == 0) return 8;
+    if (strcmp(type_name, "uint64_t") == 0) return 8;
+    
     if (strcmp(type_name, "long double") == 0) return sizeof(long double);
     if (strcmp(type_name, "string") == 0) return 8; // pointer
     if (strcmp(type_name, "wstring") == 0) return 8; // pointer
     
     return 0;
+}
+
+void resolve_type_size(const char* type_name, uint32_t* size, uint32_t* align) {
+    *size = 0; *align = 1;
+    if (!type_name) return;
+
+    const char* lookup_name = type_name;
+    while (*lookup_name == ' ') lookup_name++; // skip leading spaces
+    if (strncmp(lookup_name, "struct ", 7) == 0) lookup_name += 7;
+    else if (strncmp(lookup_name, "union ", 6) == 0) lookup_name += 6;
+    else if (strncmp(lookup_name, "enum ", 5) == 0) lookup_name += 5;
+    
+    while (*lookup_name == ' ') lookup_name++;
+
+    // 1. Primitive?
+    size_t prim = get_primitive_size_align(lookup_name);
+    if (prim > 0) {
+        *size = (uint32_t)prim;
+        *align = (prim >= 8) ? 8 : (uint32_t)prim;
+        if (strcmp(lookup_name, "string") == 0) *align = 8; // pointer align
+        return;
+    }
+
+    // 2. Lookup Rec
+    dm_rec_t* rec = dm_find_by_c_name(dm_types, lookup_name);
+    if (!rec) rec = dm_find_by_name(dm_types, lookup_name);
+    
+    if (rec) {
+        if (rec->kind && strcmp(rec->kind, "alias") == 0) {
+             uint32_t base_size = 0, base_align = 1;
+             resolve_type_size(rec->type, &base_size, &base_align);
+             
+             if (rec->is_array) { 
+                 *size = base_size * rec->size; // rec->size is count
+             } else {
+                 *size = base_size;
+             }
+             *align = base_align;
+        } else if (rec->kind && strcmp(rec->kind, "sequence") == 0) {
+             *size = 24; *align = 8;
+        } else {
+            // Struct/Enum/Union
+             *size = rec->size; // Byte size
+             *align = rec->align;
+        }
+    }
 }
 
 static uint32_t align_up(uint32_t offset, size_t alignment) {
@@ -159,31 +217,35 @@ void dm_calculate_layout(dm_rec_t* struct_rec) {
         size_t member_size = 0;
         size_t member_align = 1;
         
-        size_t prim_size = get_primitive_size_align(member->type);
-        if (prim_size > 0) {
-            member_size = prim_size;
-            member_align = (prim_size >= 8) ? 8 : prim_size;
-            
-            // Handle C-mapping of bounded strings (char array)
-            if (strcmp(member->type, "string") == 0 && member->bound > 0) {
-                member_size = member->bound + 1;
-                member_align = 1;
-            }
+        if (member->is_optional) {
+            // Optionals are mapped as pointers in C
+            member_size = 8;
+            member_align = 8;
         } else {
-            dm_rec_t* nested = dm_find_by_c_name(dm_types, member->type);
-            if (!nested) nested = dm_find_by_name(dm_types, member->type);
+            uint32_t resolved_size = 0, resolved_align = 1;
+            resolve_type_size(member->type, &resolved_size, &resolved_align);
             
-            if (nested && nested->size > 0) {
-                member_size = nested->size;
-                member_align = nested->align;
+            if (resolved_size > 0) {
+                 member_size = resolved_size;
+                 member_align = resolved_align;
+                 
+                 // Handle C-mapping of bounded strings (char array)
+                 if (strcmp(member->type, "string") == 0 && member->bound > 0) {
+                    member_size = member->bound + 1;
+                    member_align = 1;
+                 }
             } else if ((member->kind && strcmp(member->kind, "sequence") == 0) || (member->type && strstr(member->type, "sequence"))) {
-                member_size = 24; member_align = 8;
+                    member_size = 24; member_align = 8;
             } else {
-                member_size = 4; member_align = 4;
+                    fprintf(stderr, "[JSON Plugin Debug] Unknown type '%s' for member '%s' (kind: %s), defaulting to size 4\n", 
+                        member->type ? member->type : "NULL", 
+                        member->name ? member->name : "NULL",
+                        member->kind ? member->kind : "NULL");
+                    member_size = 4; member_align = 4;
             }
+            
+            if (member->is_array && member->size > 0) member_size *= member->size;
         }
-        
-        if (member->is_array && member->size > 0) member_size *= member->size;
         
         cursor = align_up(cursor, member_align);
         member->offset = cursor;

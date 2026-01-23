@@ -729,7 +729,20 @@ emit_typedef(
         return IDL_RETCODE_NO_MEMORY;
       
       dm_rec_t *rec = dm_new();
-      rec->name = idl_strdup(name);
+      rec->c_name = idl_strdup(name); 
+      
+      // Use C name for Name as fallback or primary if scoped name fails/is weird
+      rec->name = idl_strdup(name); 
+      /*
+      char *scoped_name = NULL;
+      if (IDL_PRINTA(&scoped_name, print_scoped_name, declarator) >= 0) {
+          // Check if scoped_name is valid?
+          // Using C Name seems safer for now to avoid encoding/pointer issues
+          // free(rec->name);
+          // rec->name = scoped_name;
+      } 
+      */
+
       rec->type = idl_strdup(type);
 
       if (idl_is_sequence(type_spec)) {
@@ -840,6 +853,7 @@ emit_enum(
   rec->name = idl_strdup(type);
   rec->c_name = idl_strdup(type);
   rec->kind = idl_strdup("enum");
+  rec->size = 4; rec->align = 4;
   
   idl_extensibility_t ext = ((const idl_enum_t*)node)->extensibility.value;
   if (ext == IDL_MUTABLE) rec->extensibility = idl_strdup("mutable");
