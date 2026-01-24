@@ -1,19 +1,14 @@
 #
 # Copyright(c) 2018 to 2022 ZettaScale Technology and others
-# ...
+#
+# This program and the accompanying materials are made available under the
+# terms of the Eclipse Public License v. 2.0 which is available at
+# http://www.eclipse.org/legal/epl-2.0, or the Eclipse Distribution License
+# v. 1.0 which is available at
+# http://www.eclipse.org/org/documents/edl-v10.php.
+#
 # SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
 #
-cmake_minimum_required(VERSION 3.16)
-project(cycloneddsidljson C)
-
-set(CYCLONE_INSTALL_DIR "D:/Work/FastCycloneDdsCsharpBindings/cyclone-compiled")
-set(CycloneDDS_SOURCE_DIR "D:/Work/FastCycloneDdsCsharpBindings/cyclonedds")
-
-include_directories("${CYCLONE_INSTALL_DIR}/include")
-include_directories("${CycloneDDS_SOURCE_DIR}/src/idl/src")
-include_directories("src")
-include_directories("include")
-link_directories("${CYCLONE_INSTALL_DIR}/lib")
 
 include(GenerateExportHeader)
 configure_file(src/idlc/config.h.in config.h)
@@ -37,14 +32,12 @@ set(
 add_library(
   libidljson SHARED ${libidljson_srcs} ${libidljson_hdrs})
 
-target_link_libraries(libidljson PRIVATE cycloneddsidl cycloneddsidlc ddsc)
-
 if(MSVC)
   # ignore warning 5286 and 5287 about enum type conversion
   target_compile_options(libidljson PRIVATE /wd5286 /wd5287)
 endif()
 
-generate_export_header(libidljson BASE_NAME LIBIDLC EXPORT_FILE_NAME include/libidlc/libidlc_export.h)
+generate_export_header(libidljson BASE_NAME LIBIDLJSON EXPORT_FILE_NAME include/libidlc/libidljson_export.h)
 
 set_target_properties(libidljson PROPERTIES
    OUTPUT_NAME "cycloneddsidljson"
@@ -62,9 +55,6 @@ target_include_directories(
   libidljson
   PRIVATE
     include
-    include/idlc
-    include/generator_common
-    ${CMAKE_CURRENT_BINARY_DIR}
     ${CMAKE_CURRENT_BINARY_DIR}/include
   PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include/libidlc>"
@@ -72,7 +62,7 @@ target_include_directories(
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../core/ddsi/include>"
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../core/cdr/include>")
 
-# target_link_libraries(libidljson PRIVATE idl ddsc)
+target_link_libraries(libidljson PRIVATE idl ddsc)
 
 add_library(${PROJECT_NAME}::libidljson ALIAS libidljson)
 
@@ -92,25 +82,12 @@ install(
   COMPONENT dev
   FILES_MATCHING PATTERN "*.h")
 
-# Remove idlc install
-# install(
-#   TARGETS idlc
-# ...
-
-if (INSTALL_PDB)
-  # install(FILES $<TARGET_PDB_FILE:idlc>
-  #   DESTINATION "${CMAKE_INSTALL_BINDIR}"
-  #   COMPONENT dev
-  #   OPTIONAL
-  # )
-endif()
-
-# include("${CycloneDDS_SOURCE_DIR}/cmake/Modules/Generate.cmake")
+include("${CycloneDDS_SOURCE_DIR}/cmake/Modules/Generate.cmake")
 
 if(BUILD_TESTING)
-  # add_subdirectory(tests)
+  add_subdirectory(tests)
 endif()
 
 if(BUILD_IDLC_XTESTS)
-  # add_subdirectory(xtests)
+  add_subdirectory(xtests)
 endif()

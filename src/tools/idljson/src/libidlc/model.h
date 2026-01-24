@@ -3,7 +3,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
-#include "libidlc/libidlc_export.h"
+#include "libidlc/libidljson_export.h"
 
 // Value type enumeration
 enum dm_type {
@@ -95,20 +95,20 @@ typedef struct dm_rec {
 } dm_rec_t;
 
 // Global state
-extern dm_rec_t* dm_sources;
-extern dm_rec_t* dm_types;
-extern dm_rec_t* dm_last_struct;
-extern dm_rec_t* dm_last_enum;
+LIBIDLJSON_EXPORT extern dm_rec_t* dm_sources;
+LIBIDLJSON_EXPORT extern dm_rec_t* dm_types;
+LIBIDLJSON_EXPORT extern dm_rec_t* dm_last_struct;
+LIBIDLJSON_EXPORT extern dm_rec_t* dm_last_enum;
 
 // Functions
-extern dm_rec_t* dm_new(void);
-extern dm_rec_t* dm_add(dm_rec_t** list, dm_rec_t* item);
-extern void dm_fprint(FILE* fh);
-extern void dm_calculate_layout(dm_rec_t* struct_rec);
-extern int dm_get_member_offset(const char* type_c_name, const char* member_name);
-extern dm_rec_t* dm_find_by_name(dm_rec_t* list, const char* name);
-extern dm_rec_t* dm_find_by_c_name(dm_rec_t* list, const char* c_name);
-extern size_t get_primitive_size_align(const char* type_name);
-extern void resolve_type_size(const char* type_name, uint32_t* size, uint32_t* align);
+LIBIDLJSON_EXPORT extern dm_rec_t* dm_new(void);
+LIBIDLJSON_EXPORT extern dm_rec_t* dm_add(dm_rec_t** list, dm_rec_t* item);
+LIBIDLJSON_EXPORT extern void dm_fprint(FILE* fh);
+LIBIDLJSON_EXPORT extern void dm_calculate_layout(dm_rec_t* struct_rec);
+LIBIDLJSON_EXPORT extern int dm_get_member_offset(const char* type_c_name, const char* member_name);
+LIBIDLJSON_EXPORT extern dm_rec_t* dm_find_by_name(dm_rec_t* list, const char* name);
+LIBIDLJSON_EXPORT extern dm_rec_t* dm_find_by_c_name(dm_rec_t* list, const char* c_name);
+LIBIDLJSON_EXPORT extern size_t get_primitive_size_align(const char* type_name);
+LIBIDLJSON_EXPORT extern void resolve_type_size(const char* type_name, uint32_t* size, uint32_t* align);
 
 #endif /* MODEL_H */
