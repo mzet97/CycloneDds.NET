@@ -172,8 +172,14 @@ void dm_calculate_layout(dm_rec_t* struct_rec) {
             // Re-use primitive size logic
             size_t prim_size = get_primitive_size_align(member->type);
             if (prim_size > 0) {
-                member_size = prim_size;
-                member_align = (prim_size >= 8) ? 8 : prim_size;
+                // Handle C-mapping of bounded strings (char array) in Unions
+                if (strcmp(member->type, "string") == 0 && member->bound > 0) {
+                    member_size = member->bound + 1;
+                    member_align = 1;
+                } else {
+                    member_size = prim_size;
+                    member_align = (prim_size >= 8) ? 8 : (uint32_t)prim_size;
+                }
             } else {
                  dm_rec_t* nested = dm_find_by_c_name(dm_types, member->type);
                  if (!nested) nested = dm_find_by_name(dm_types, member->type);

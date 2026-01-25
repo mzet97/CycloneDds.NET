@@ -874,7 +874,11 @@ emit_case(
         off++;
       }
       /* generate union case discriminator, use 0 for default case */
-      if ((ret = stash_constant(pstate, &ctype->instructions, off++, idl_is_default_case_label(label) || idl_is_implicit_default_case_label(label) ? 0 : label->const_expr)))
+      int64_t val = 0;
+      if (!idl_is_default_case_label(label) && !idl_is_implicit_default_case_label(label)) {
+          val = idl_case_label_intvalue(label);
+      }
+      if ((ret = stash_single(pstate, &ctype->instructions, off++, (uint32_t)val)))
         return ret;
       /* generate union case member (address) offset; use offset 0 for empty types,
          as these members are not generated and no offset can be calculated */
