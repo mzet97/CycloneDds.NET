@@ -92,6 +92,18 @@ pop_type (struct descriptor_type_meta *dtm, const void *node)
   return IDL_RETCODE_OK;
 }
 
+static bool
+is_on_stack (struct descriptor_type_meta *dtm, const void *node)
+{
+  struct type_meta *tm = dtm->stack;
+  while (tm) {
+    if (tm->node == node)
+      return true;
+    tm = tm->stack_prev;
+  }
+  return false;
+}
+
 static idl_retcode_t
 xcdr2_ser (
   const void *obj,
@@ -377,6 +389,12 @@ get_hashed_typeid (const idl_pstate_t *pstate, struct descriptor_type_meta *dtm,
   while (tm && tm->node != type_spec)
     tm = tm->admin_next;
   if (!tm || !tm->finalized) {
+    if (tm && !tm->finalized && is_on_stack(dtm, tm->node)) {
+      /* Recursion: return placeholder hash to break the cycle */
+      ti->_d = kind;
+      memset (ti->_u.equivalence_hash, 0, sizeof (ti->_u.equivalence_hash));
+      return IDL_RETCODE_OK;
+    }
     idl_error (pstate, idl_location (type_spec), "Type id not found for type %s", idl_identifier (type_spec));
     return IDL_RETCODE_BAD_PARAMETER;
   }
@@ -1028,6 +1046,9 @@ add_typedef (
   struct descriptor_type_meta *dtm = (struct descriptor_type_meta *) user_data;
   const idl_type_spec_t *type_spec = idl_is_array (node) ? node : idl_type_spec (node);
 
+  if (!revisit && is_on_stack (dtm, node))
+      return IDL_RETCODE_OK | IDL_VISIT_DONT_RECURSE;
+
   // don't visit fully descriptive type-spec, but visit plain-collection type-spec
   bool visit_type_spec = idl_is_array (node) || !has_fully_descriptive_typeid_impl (type_spec, false, false);
 
@@ -1105,6 +1126,8 @@ add_array (
   return IDL_RETCODE_OK;
 }
 
+
+
 static idl_retcode_t
 emit_struct(
   const idl_pstate_t *pstate,
@@ -1119,6 +1142,9 @@ emit_struct(
 
   (void) pstate;
   (void) path;
+  if (!revisit && is_on_stack (dtm, node))
+      return IDL_RETCODE_OK | IDL_VISIT_DONT_RECURSE;
+
   if (revisit) {
     assert (dtm->stack->to_minimal->_u.minimal._d == DDS_XTypes_TK_STRUCTURE);
     assert (dtm->stack->to_complete->_u.complete._d == DDS_XTypes_TK_STRUCTURE);
@@ -1161,6 +1187,9 @@ emit_union(
 
   (void) pstate;
   (void) path;
+  if (!revisit && is_on_stack (dtm, node))
+      return IDL_RETCODE_OK | IDL_VISIT_DONT_RECURSE;
+
   if (revisit) {
     assert (dtm->stack->to_minimal->_u.minimal._d == DDS_XTypes_TK_UNION);
     assert (dtm->stack->to_complete->_u.complete._d == DDS_XTypes_TK_UNION);

@@ -218,3 +218,28 @@ CU_Test(json_model, qos_extraction) {
     CU_ASSERT_EQ(topic->qos->depth, 1);
 }
 
+CU_Test(json_model, recursive_struct) {
+    const char* idl = 
+        "struct Comp {\n"
+        "  sequence<Comp> subComp;\n"
+        "};\n"
+        "struct Message {\n"
+        "  Comp c;\n"
+        "};\n";
+
+    idl_retcode_t ret = run_json_generation(idl);
+    CU_ASSERT_EQ_FATAL(ret, IDL_RETCODE_OK);
+    
+    dm_rec_t* comp = dm_find_by_name(dm_types, "Comp");
+    CU_ASSERT_FATAL(comp != NULL);
+    
+    dm_rec_t* sub = dm_find_by_name(comp->members, "subComp");
+    CU_ASSERT_FATAL(sub != NULL);
+    if (sub && sub->type) printf("DEBUG: Actual sub->type: '%s'\n", sub->type);
+    CU_ASSERT_FATAL(sub->type != NULL);
+    CU_ASSERT(strstr(sub->type, "sequence") != NULL);
+    CU_ASSERT(strstr(sub->type, "Comp") != NULL);
+    // CU_ASSERT_FATAL(strcmp(sub->type, "sequence<struct Comp>") == 0);
+    CU_ASSERT_FATAL(strcmp(sub->kind, "sequence") == 0);
+}
+

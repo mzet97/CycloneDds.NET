@@ -287,6 +287,50 @@ emit_field(
   return IDL_RETCODE_OK;
 }
 
+static idl_retcode_t
+emit_member(
+  const idl_pstate_t *pstate,
+  bool revisit,
+  const idl_path_t *path,
+  const void *node,
+  void *user_data)
+{
+  const idl_member_t *member = (const idl_member_t *)node;
+  const idl_declarator_t *declarator;
+  idl_retcode_t ret;
+
+  (void)revisit;
+
+  declarator = member->declarators;
+  for (; declarator; declarator = idl_next(declarator)) {
+    if ((ret = emit_field(pstate, false, path, declarator, user_data)))
+      return ret;
+  }
+  return IDL_VISIT_DONT_RECURSE;
+}
+
+static idl_retcode_t
+emit_case(
+  const idl_pstate_t *pstate,
+  bool revisit,
+  const idl_path_t *path,
+  const void *node,
+  void *user_data)
+{
+  const idl_case_t *c = (const idl_case_t *)node;
+  const idl_declarator_t *declarator;
+  idl_retcode_t ret;
+
+  (void)revisit;
+
+  declarator = c->declarator;
+  for (; declarator; declarator = idl_next(declarator)) {
+    if ((ret = emit_field(pstate, false, path, declarator, user_data)))
+      return ret;
+  }
+  return IDL_VISIT_DONT_RECURSE;
+}
+
 
 
 // Helper to parse QoS string values
@@ -1044,7 +1088,7 @@ idl_retcode_t generate_types(const idl_pstate_t *pstate, struct generator *gener
   idl_visitor_t visitor;
 
   memset(&visitor, 0, sizeof(visitor));
-  visitor.visit = IDL_CONST | IDL_TYPEDEF | IDL_STRUCT | IDL_UNION | IDL_ENUM | IDL_BITMASK | IDL_DECLARATOR | IDL_FORWARD;
+  visitor.visit = IDL_CONST | IDL_TYPEDEF | IDL_STRUCT | IDL_UNION | IDL_ENUM | IDL_BITMASK | IDL_DECLARATOR | IDL_MEMBER | IDL_CASE | IDL_FORWARD;
   visitor.accept[IDL_ACCEPT_CONST] = &emit_const;
   visitor.accept[IDL_ACCEPT_TYPEDEF] = &emit_typedef;
   visitor.accept[IDL_ACCEPT_STRUCT] = &emit_struct;
@@ -1052,6 +1096,8 @@ idl_retcode_t generate_types(const idl_pstate_t *pstate, struct generator *gener
   visitor.accept[IDL_ACCEPT_ENUM] = &emit_enum;
   visitor.accept[IDL_ACCEPT_BITMASK] = &emit_bitmask;
   visitor.accept[IDL_ACCEPT_DECLARATOR] = &emit_field;
+  visitor.accept[IDL_ACCEPT_MEMBER] = &emit_member;
+  visitor.accept[IDL_ACCEPT_CASE] = &emit_case;
   visitor.accept[IDL_ACCEPT_FORWARD] = &emit_forward;
   visitor.sources = NULL;
   if ((ret = idl_visit(pstate, pstate->root, &visitor, generator)))
