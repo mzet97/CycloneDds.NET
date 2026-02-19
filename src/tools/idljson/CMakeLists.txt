@@ -11,7 +11,7 @@
 #
 
 include(GenerateExportHeader)
-configure_file(src/idlc/config.h.in config.h)
+configure_file(config.h.in config.h)
 
 set(
   libidljson_hdrs
@@ -60,7 +60,8 @@ target_include_directories(
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include/libidlc>"
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/libidlc>"
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../core/ddsi/include>"
-    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../core/cdr/include>")
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../core/cdr/include>"
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../idlc/include>")
 
 target_link_libraries(libidljson PRIVATE idl ddsc)
 
@@ -77,7 +78,6 @@ install(
   DIRECTORY
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include/libidlc>"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/libidlc"
-        "${CMAKE_CURRENT_SOURCE_DIR}/include/idlc"
   DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
   COMPONENT dev
   FILES_MATCHING PATTERN "*.h")
@@ -88,6 +88,4 @@ if(BUILD_TESTING)
   add_subdirectory(tests)
 endif()
 
-if(BUILD_IDLC_XTESTS)
-  add_subdirectory(xtests)
-endif()
+
