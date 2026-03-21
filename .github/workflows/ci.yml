@@ -21,13 +21,9 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            shell: pwsh
             cmake_generator: "Visual Studio 17 2022"
-            native_script: .\build\native-win.ps1
           - os: ubuntu-latest
-            shell: bash
             cmake_generator: "Unix Makefiles"
-            native_script: ./build/native-linux.sh
 
     env:
       CMAKE_GENERATOR: ${{ matrix.cmake_generator }}
@@ -54,9 +50,15 @@ jobs:
         dotnet --version
         cmake --version
 
-    - name: Build Native
-      shell: ${{ matrix.shell }}
-      run: ${{ matrix.native_script }}
+    - name: Build Native (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: .\build\native-win.ps1
+
+    - name: Build Native (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: ./build/native-linux.sh
 
     - name: Set Native Path (Windows)
       if: runner.os == 'Windows'
