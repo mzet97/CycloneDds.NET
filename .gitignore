@@ -60,4 +60,4 @@ build/native/
 test-extract/
 test-output/
 **/Generated/*
-check-*/build/native-linux/
+build/native-linux/
