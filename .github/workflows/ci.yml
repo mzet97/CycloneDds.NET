@@ -8,6 +8,10 @@ on:
     branches: [ master, main ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+  packages: write
+
 jobs:
   build:
     runs-on: ${{ matrix.os }}
@@ -31,7 +35,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        fetch-depth: 0 # Required for Nerdbank.GitVersioning to determine version
+        fetch-depth: 0
         submodules: recursive
 
     - name: Setup .NET
@@ -88,13 +92,13 @@ jobs:
     - name: Upload Native Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: native-artifacts-${{ runner.os }}
+        name: native-artifacts-${{ matrix.os }}
         path: artifacts/native/
 
   pack:
     needs: build
     runs-on: windows-latest
-    if: github.event_name != 'pull_request'  # Only pack on main branch or tags
+    if: github.event_name != 'pull_request'
 
     steps:
     - uses: actions/checkout@v4
@@ -125,11 +129,9 @@ jobs:
 
     - name: Upload NuGet Packages
       uses: actions/upload-artifact@v4
-      if: always()
       with:
         name: nuget-packages
         path: artifacts/nuget/*.nupkg
-        if-no-files-found: warn
 
     - name: Upload Symbol Packages
       uses: actions/upload-artifact@v4
@@ -138,3 +140,61 @@ jobs:
         name: symbol-packages
         path: artifacts/nuget/*.snupkg
         if-no-files-found: warn
+
+    - name: Publish to GitHub Packages
+      run: |
+        dotnet nuget push artifacts/nuget/*.nupkg `
+          --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" `
+          --api-key ${{ secrets.GITHUB_TOKEN }} `
+          --skip-duplicate
+      shell: pwsh
+
+  release:
+    needs: pack
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Download NuGet Packages
+      uses: actions/download-artifact@v4
+      with:
+        name: nuget-packages
+        path: artifacts/nuget
+
+    - name: Download Symbol Packages
+      uses: actions/download-artifact@v4
+      with:
+        name: symbol-packages
+        path: artifacts/nuget
+
+    - name: Download Windows Native Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: native-artifacts-windows-latest
+        path: artifacts/native-windows
+
+    - name: Download Linux Native Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: native-artifacts-ubuntu-latest
+        path: artifacts/native-linux
+
+    - name: Package Native Artifacts
+      run: |
+        cd artifacts
+        tar -czf native-win-x64.tar.gz -C native-windows .
+        tar -czf native-linux-x64.tar.gz -C native-linux .
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        generate_release_notes: true
+        files: |
+          artifacts/nuget/*.nupkg
+          artifacts/nuget/*.snupkg
+          artifacts/native-win-x64.tar.gz
+          artifacts/native-linux-x64.tar.gz
