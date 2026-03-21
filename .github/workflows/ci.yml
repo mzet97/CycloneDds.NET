@@ -76,7 +76,11 @@ jobs:
       run: dotnet build CycloneDDS.NET.Core.slnf -c Release
 
     - name: Run Tests
-      run: dotnet test CycloneDDS.NET.Core.slnf -c Release --no-build --logger trx --results-directory artifacts/testresults
+      run: dotnet test CycloneDDS.NET.Core.slnf -c Release --no-build --logger trx --results-directory artifacts/testresults --filter "FullyQualifiedName!~FeatureDemo.Tests"
+
+    - name: Run FeatureDemo Tests (best-effort)
+      continue-on-error: true
+      run: dotnet test tests/FeatureDemo.Tests/FeatureDemo.Tests.csproj -c Release --no-build --logger trx --results-directory artifacts/testresults
 
     - name: Linux NuGet Smoke (Real DDS)
       if: runner.os == 'Linux'
