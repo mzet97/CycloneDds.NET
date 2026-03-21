@@ -22,18 +22,34 @@ $ErrorActionPreference = "Stop"
 
 $RepoRoot = $PSScriptRoot | Split-Path -Parent
 
+# Detect OS and set appropriate native artifacts path
+$IsWindows = $PSVersionTable.PSVersion.Major -lt 7 -or $IsWindows
+if ($IsWindows) {
+    $NativeArtifacts = Join-Path $RepoRoot "artifacts/native/win-x64/ddsc.dll"
+    $NativeScript = Join-Path $PSScriptRoot "native-win.ps1"
+    Write-Host "Detected Windows" -ForegroundColor Gray
+} else {
+    $NativeArtifacts = Join-Path $RepoRoot "artifacts/native/linux-x64/libddsc.so"
+    $NativeScript = Join-Path $PSScriptRoot "native-linux.sh"
+    Write-Host "Detected Linux" -ForegroundColor Gray
+}
+
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "  CycloneDDS.NET: Build & Test ($Configuration)" -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 
 # 0. Check for Native Artifacts
-$NativeArtifacts = Join-Path $RepoRoot "artifacts/native/win-x64/ddsc.dll"
 if (-not (Test-Path $NativeArtifacts)) {
     if ($SkipNative) {
         Write-Warning "Native artifacts not found at $NativeArtifacts. Tests may fail."
     } else {
         Write-Host "`n[0/3] Native artifacts missing. Building native..." -ForegroundColor Yellow
-        & (Join-Path $PSScriptRoot "native-win.ps1") -Configuration $Configuration
+        if ($IsWindows) {
+            & $NativeScript -Configuration $Configuration
+        } else {
+            # Call bash script on Linux
+            bash $NativeScript $Configuration
+        }
         if ($LASTEXITCODE -ne 0) { throw "Native build failed." }
     }
 } elseif (-not $SkipNative) {

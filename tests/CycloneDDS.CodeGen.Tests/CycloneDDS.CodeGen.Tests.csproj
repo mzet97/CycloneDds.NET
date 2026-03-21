@@ -23,12 +23,19 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\tools\CycloneDDS.CodeGen\CycloneDDS.CodeGen.csproj" />
+    <ProjectReference Include="..\..\src\CycloneDDS.Core\CycloneDDS.Core.csproj" />
+    <ProjectReference Include="..\..\src\CycloneDDS.Schema\CycloneDDS.Schema.csproj" />
     <ProjectReference Include="..\..\src\CycloneDDS.Runtime\CycloneDDS.Runtime.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- CycloneDDS Native Binaries -->
-    <None Include="..\..\artifacts\native\win-x64\*.dll">
+    <!-- CycloneDDS Native Binaries - Windows -->
+    <None Include="..\..\artifacts\native\win-x64\*.dll" Condition="'$(OS)' == 'Windows'">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>%(Filename)%(Extension)</Link>
+    </None>
+    <!-- CycloneDDS Native Binaries - Linux -->
+    <None Include="..\..\artifacts\native\linux-x64\*.so*" Condition="'$(OS)' == 'Unix'">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>%(Filename)%(Extension)</Link>
     </None>

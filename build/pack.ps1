@@ -21,6 +21,16 @@ $RepoRoot = $PSScriptRoot | Split-Path -Parent
 $ArtifactsDir = Join-Path $RepoRoot "artifacts"
 $NuGetDir = Join-Path $ArtifactsDir "nuget"
 
+# Detect OS and select appropriate native build script
+$IsWindows = $PSVersionTable.PSVersion.Major -lt 7 -or $IsWindows
+if ($IsWindows) {
+    $NativeScript = Join-Path $PSScriptRoot "native-win.ps1"
+    Write-Host "Detected Windows - using native-win.ps1" -ForegroundColor Gray
+} else {
+    $NativeScript = Join-Path $PSScriptRoot "native-linux.sh"
+    Write-Host "Detected Linux - using native-linux.sh" -ForegroundColor Gray
+}
+
 # Solution filter that excludes examples/ projects.
 # Examples reference CycloneDDS.NET as a NuGet package, which doesn't exist until
 # after the Pack step, so they must be restored/built separately (see step 6 below).
@@ -35,7 +45,6 @@ Write-Host "============================================================" -Foreg
 
 # 1. Native Build
 Write-Host "`n[1/6] Building Native Assets..." -ForegroundColor Yellow
-$NativeScript = Join-Path $PSScriptRoot "native-win.ps1"
 & $NativeScript -Configuration Release
 if ($LASTEXITCODE -ne 0) { throw "Native build failed." }
 

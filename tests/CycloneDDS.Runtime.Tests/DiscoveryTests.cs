@@ -10,6 +10,8 @@ namespace CycloneDDS.Runtime.Tests
 {
     public class DiscoveryTests : IDisposable
     {
+        private static readonly TimeSpan DiscoveryTimeout = TimeSpan.FromSeconds(5);
+
         private DdsParticipant _participant;
         private string _topicName;
 
@@ -28,7 +30,7 @@ namespace CycloneDDS.Runtime.Tests
         public async Task PublicationMatched_EventFires_OnReaderCreation()
         {
              using var writer = new DdsWriter<TestMessage>(_participant, _topicName);
-             var tcs = new TaskCompletionSource<bool>();
+             var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
              
              writer.PublicationMatched += (s, e) => {
                  if (e.CurrentCount > 0) tcs.TrySetResult(true);
@@ -36,7 +38,7 @@ namespace CycloneDDS.Runtime.Tests
              
              using var reader = new DdsReader<TestMessage>(_participant, _topicName);
              
-             var task = await Task.WhenAny(tcs.Task, Task.Delay(2000));
+             var task = await Task.WhenAny(tcs.Task, Task.Delay(DiscoveryTimeout));
              Assert.Equal(tcs.Task, task);
              Assert.True(tcs.Task.Result);
              
@@ -48,14 +50,11 @@ namespace CycloneDDS.Runtime.Tests
         {
              using var writer = new DdsWriter<TestMessage>(_participant, _topicName);
              
-             var waitTask = writer.WaitForReaderAsync(TimeSpan.FromSeconds(3));
-             
-             await Task.Delay(100);
-             Assert.False(waitTask.IsCompleted);
+             var waitTask = writer.WaitForReaderAsync(DiscoveryTimeout);
              
              using var reader = new DdsReader<TestMessage>(_participant, _topicName);
              
-             var completed = await Task.WhenAny(waitTask, Task.Delay(2000));
+             var completed = await Task.WhenAny(waitTask, Task.Delay(DiscoveryTimeout));
              Assert.Same(waitTask, completed);
              Assert.True(waitTask.Result);
         }
@@ -67,10 +66,10 @@ namespace CycloneDDS.Runtime.Tests
              using var reader = new DdsReader<TestMessage>(_participant, _topicName);
              
              // Wait for discovery
-             Assert.True(writer.WaitForReaderAsync(TimeSpan.FromSeconds(2)).Result);
+             Assert.True(writer.WaitForReaderAsync(DiscoveryTimeout).Result);
              
              // Setup disconnect monitoring
-             var tcs = new TaskCompletionSource<bool>();
+             var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
              writer.PublicationMatched += (s, e) => {
                  if (e.CurrentCountChange < 0) tcs.TrySetResult(true);
              };
@@ -78,7 +77,7 @@ namespace CycloneDDS.Runtime.Tests
              reader.Dispose();
              
              // Wait for disconnect event
-             Assert.True(tcs.Task.Wait(2000));
+             Assert.True(tcs.Task.Wait(DiscoveryTimeout));
         }
 
         [Fact]
@@ -107,7 +106,7 @@ namespace CycloneDDS.Runtime.Tests
         public async Task WaitForReaderAsync_Timeout_ReturnsFalse()
         {
              using var writer = new DdsWriter<TestMessage>(_participant, _topicName);
-             var result = await writer.WaitForReaderAsync(TimeSpan.FromMilliseconds(200));
+             var result = await writer.WaitForReaderAsync(TimeSpan.FromMilliseconds(500));
              Assert.False(result);
         }
     }

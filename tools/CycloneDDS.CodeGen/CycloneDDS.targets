@@ -19,14 +19,20 @@
     <PropertyGroup>
       <CodeGenAssembly Condition="'$(Configuration)' == 'Release'">$(MSBuildThisFileDirectory)bin\Release\net8.0\CycloneDDS.CodeGen.dll</CodeGenAssembly>
       <CodeGenAssembly Condition="'$(Configuration)' != 'Release'">$(MSBuildThisFileDirectory)bin\Debug\net8.0\CycloneDDS.CodeGen.dll</CodeGenAssembly>
-      
+
       <SourcePath>$(MSBuildProjectDirectory)</SourcePath>
       <OutputPath>$(MSBuildProjectDirectory)\obj\Generated</OutputPath>
+
+      <!-- Linux: Set LD_LIBRARY_PATH for idlc -->
+      <LinuxNativePath>$(MSBuildThisFileDirectory)..\..\artifacts\native\linux-x64</LinuxNativePath>
+      <ExecEnvironment Condition="'$(OS)' == 'Unix'">export LD_LIBRARY_PATH="$(LinuxNativePath):$LD_LIBRARY_PATH" &amp;&amp;</ExecEnvironment>
+      <ExecEnvironment Condition="'$(OS)' != 'Unix'"></ExecEnvironment>
     </PropertyGroup>
-    
+
     <Message Text="Running CycloneDDS Code Generator..." Importance="high" />
     <Message Text="CodeGenAssembly: $(CodeGenAssembly)" Importance="high" />
-    <Exec Command="dotnet &quot;$(CodeGenAssembly)&quot; &quot;$(SourcePath)&quot; &quot;$(OutputPath)&quot; &quot;@(ReferencePath)&quot;" />
+    <Message Text="Linux Native Path: $(LinuxNativePath)" Importance="normal" />
+    <Exec Command="$(ExecEnvironment) dotnet &quot;$(CodeGenAssembly)&quot; &quot;$(SourcePath)&quot; &quot;$(OutputPath)&quot; &quot;@(ReferencePath)&quot;" />
     
     <ItemGroup>
         <Compile Include="$(OutputPath)\**\*.cs" />

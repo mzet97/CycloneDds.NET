@@ -248,11 +248,15 @@ namespace CycloneDDS.Runtime
                  if (_readerHandle != null)
                  {
                      DdsApi.dds_reader_set_listener(_readerHandle.NativeHandle, _listener);
+                     const uint readerStatusMask =
+                         DdsApi.DDS_DATA_AVAILABLE_STATUS |
+                         DdsApi.DDS_SUBSCRIPTION_MATCHED_STATUS;
+                     DdsApi.dds_set_status_mask(_readerHandle.NativeHandle.Handle, readerStatusMask);
                  }
              }
         }
         
-        private static void OnSubscriptionMatched(int reader, ref DdsApi.DdsSubscriptionMatchedStatus status, IntPtr arg)
+        private static void OnSubscriptionMatched(int reader, DdsApi.DdsSubscriptionMatchedStatus status, IntPtr arg)
         {
              if (arg == IntPtr.Zero) return;
              try
@@ -284,16 +288,16 @@ namespace CycloneDDS.Runtime
         {
             using var scope = Take();
             if (scope.Count == 0) return Array.Empty<T>();
-            var batch = new T[scope.Count];
-            int i = 0;
+
+            var batch = new List<T>(scope.Count);
             foreach (var item in scope)
             {
                  if (item.IsValid)
-                     batch[i++] = item.Data;
-                 else
-                     batch[i++] = default;
+                 {
+                     batch.Add(item.Data);
+                 }
             }
-            return batch;
+            return batch.Count == 0 ? Array.Empty<T>() : batch.ToArray();
         }
 
         public async IAsyncEnumerable<T> StreamAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)

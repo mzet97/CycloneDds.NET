@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG CMakeFiles/symbol_export_test.dir/symbol_export.c.o -o ../../../../bin/symbol_export_test  -Wl,-rpath,/mnt/e/TI/git/tese/CycloneDds.NET/build/native-linux/lib ../../../../lib/libddsc.so.0.11.0 

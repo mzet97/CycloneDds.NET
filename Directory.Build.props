@@ -1,5 +1,6 @@
 <Project>
   <PropertyGroup>
+    <CycloneDdsDisableCodeGen>true</CycloneDdsDisableCodeGen>
     <Authors>CycloneDDS.NET Authors</Authors>
     <Company>CycloneDDS.NET</Company>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

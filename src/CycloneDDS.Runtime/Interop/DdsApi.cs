@@ -56,12 +56,29 @@ namespace CycloneDDS.Runtime.Interop
             private uint _pad4;
         }
 
+        // NOTE: The iovec struct has DIFFERENT field order between Windows and Linux!
+        // - Windows (WSABUF): { ULONG len; CHAR* buf; }  -> len FIRST (4 bytes), total 16 with padding
+        // - Linux (POSIX iovec): { void* iov_base; size_t iov_len; } -> base FIRST (8 bytes), total 16
+        //
+        // COMPILATION:
+        // - For Windows builds: Compile with -d:WINDOWS (or add <DefineConstants>WINDOWS</DefineConstants> in csproj)
+        // - For Linux builds: Default (no additional define needed)
+#if WINDOWS
         [StructLayout(LayoutKind.Sequential)]
         public struct ddsrt_iovec_t
         {
-            public UIntPtr iov_len; // Was uint, must be size_t (UIntPtr)
-            public IntPtr iov_base;
+            public uint iov_len;      // ULONG (4 bytes) - Windows WSABUF: len FIRST
+            private uint _padding;   // Padding to align next field to 8 bytes
+            public IntPtr iov_base;  // CHAR* (8 bytes)
         }
+#else
+        [StructLayout(LayoutKind.Sequential)]
+        public struct ddsrt_iovec_t
+        {
+            public IntPtr iov_base;   // void* (8 bytes) - POSIX: base FIRST
+            public UIntPtr iov_len;   // size_t (8 bytes)
+        }
+#endif
 
         // Listener Delegate
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -398,10 +415,10 @@ namespace CycloneDDS.Runtime.Interop
         }
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void DdsOnPublicationMatched(int writer, ref DdsPublicationMatchedStatus status, IntPtr arg);
+        public delegate void DdsOnPublicationMatched(int writer, DdsPublicationMatchedStatus status, IntPtr arg);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void DdsOnSubscriptionMatched(int reader, ref DdsSubscriptionMatchedStatus status, IntPtr arg);
+        public delegate void DdsOnSubscriptionMatched(int reader, DdsSubscriptionMatchedStatus status, IntPtr arg);
 
         [DllImport(DLL_NAME)]
         public extern static void dds_lset_publication_matched(IntPtr listener, DdsOnPublicationMatched callback);
@@ -417,6 +434,9 @@ namespace CycloneDDS.Runtime.Interop
         
         [DllImport(DLL_NAME)]
         public extern static int dds_get_status_changes(int entity, out uint status);
+
+        [DllImport(DLL_NAME)]
+        public extern static int dds_set_status_mask(int entity, uint mask);
 
         /// <summary>
         /// Get the GUID of a DDS entity (participant, reader, writer).

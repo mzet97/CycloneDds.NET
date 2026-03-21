@@ -6,23 +6,42 @@
     <LangVersion>12.0</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <PackageId>CycloneDDS.NET</PackageId>
-    <Description>Cyclone DDS Runtime bindings for .NET (Win64)</Description>
+    <Description>Cyclone DDS Runtime bindings for .NET (multi-platform)</Description>
     <IsPackable>true</IsPackable>
   </PropertyGroup>
 
+  <!-- Platform-specific compilation constants for P/Invoke struct layouts -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'win-x64' OR '$(OS)' == 'Windows'">
+    <DefineConstants>WINDOWS</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
-    <!-- Runtime: Native Assets -->
-    <None Include="..\..\artifacts\native\win-x64\ddsc.dll" Pack="true" PackagePath="runtimes/win-x64/native" />
-    
+    <!-- Runtime: Native Assets - Windows -->
+    <None Include="..\..\artifacts\native\win-x64\ddsc.dll" Condition="Exists('..\..\artifacts\native\win-x64\ddsc.dll')" Pack="true" PackagePath="runtimes/win-x64/native" />
+
+    <!-- Runtime: Native Assets - Linux -->
+    <None Include="..\..\artifacts\native\linux-x64\libddsc.so" Condition="Exists('..\..\artifacts\native\linux-x64\libddsc.so')" Pack="true" PackagePath="runtimes/linux-x64/native" />
+
     <!-- Build: Targets -->
     <None Include="..\..\build\targets\CycloneDDS.targets" Pack="true" PackagePath="buildTransitive/CycloneDDS.NET.targets" />
 
-    <!-- Tools: Native Assets (Explicitly selected) -->
-    <None Include="..\..\artifacts\native\win-x64\idlc.exe" Pack="true" PackagePath="tools/" />
-    <None Include="..\..\artifacts\native\win-x64\cycloneddsidl.dll" Pack="true" PackagePath="tools/" />
-    <None Include="..\..\artifacts\native\win-x64\cycloneddsidlc.dll" Pack="true" PackagePath="tools/" />
-    <None Include="..\..\artifacts\native\win-x64\cycloneddsidljson.dll" Pack="true" PackagePath="tools/" />
-    <None Include="..\..\artifacts\native\win-x64\ddsc.dll" Pack="true" PackagePath="tools/" />
+    <!-- Tools: Native Assets - Windows -->
+    <None Include="..\..\artifacts\native\win-x64\idlc.exe" Condition="Exists('..\..\artifacts\native\win-x64\idlc.exe')" Pack="true" PackagePath="tools/" />
+    <None Include="..\..\artifacts\native\win-x64\cycloneddsidl.dll" Condition="Exists('..\..\artifacts\native\win-x64\cycloneddsidl.dll')" Pack="true" PackagePath="tools/" />
+    <None Include="..\..\artifacts\native\win-x64\cycloneddsidlc.dll" Condition="Exists('..\..\artifacts\native\win-x64\cycloneddsidlc.dll')" Pack="true" PackagePath="tools/" />
+    <None Include="..\..\artifacts\native\win-x64\cycloneddsidljson.dll" Condition="Exists('..\..\artifacts\native\win-x64\cycloneddsidljson.dll')" Pack="true" PackagePath="tools/" />
+    <None Include="..\..\artifacts\native\win-x64\ddsc.dll" Condition="Exists('..\..\artifacts\native\win-x64\ddsc.dll')" Pack="true" PackagePath="tools/" />
+
+    <!-- Tools: Native Assets - Linux -->
+    <None Include="..\..\artifacts\native\linux-x64\idlc" Condition="Exists('..\..\artifacts\native\linux-x64\idlc')" Pack="true" PackagePath="tools/" />
+    <None Include="..\..\artifacts\native\linux-x64\libddsc.so" Condition="Exists('..\..\artifacts\native\linux-x64\libddsc.so')" Pack="true" PackagePath="tools/" />
+    <None Include="..\..\artifacts\native\linux-x64\libddsc.so.*" Condition="Exists('..\..\artifacts\native\linux-x64\libddsc.so')" Pack="true" PackagePath="tools/" />
+    <None Include="..\..\artifacts\native\linux-x64\libcycloneddsidl.so" Condition="Exists('..\..\artifacts\native\linux-x64\libcycloneddsidl.so')" Pack="true" PackagePath="tools/" />
+    <None Include="..\..\artifacts\native\linux-x64\libcycloneddsidl.so.*" Condition="Exists('..\..\artifacts\native\linux-x64\libcycloneddsidl.so')" Pack="true" PackagePath="tools/" />
+    <None Include="..\..\artifacts\native\linux-x64\libcycloneddsidlc.so" Condition="Exists('..\..\artifacts\native\linux-x64\libcycloneddsidlc.so')" Pack="true" PackagePath="tools/" />
+    <None Include="..\..\artifacts\native\linux-x64\libcycloneddsidlc.so.*" Condition="Exists('..\..\artifacts\native\linux-x64\libcycloneddsidlc.so')" Pack="true" PackagePath="tools/" />
+    <None Include="..\..\artifacts\native\linux-x64\libcycloneddsidljson.so" Condition="Exists('..\..\artifacts\native\linux-x64\libcycloneddsidljson.so')" Pack="true" PackagePath="tools/" />
+    <None Include="..\..\artifacts\native\linux-x64\libcycloneddsidljson.so.*" Condition="Exists('..\..\artifacts\native\linux-x64\libcycloneddsidljson.so')" Pack="true" PackagePath="tools/" />
 
     <!-- Tools: Shared Managed Libraries -->
     <None Include="..\..\tools\CycloneDDS.CodeGen\bin\$(Configuration)\net8.0\CycloneDDS.Compiler.Common.dll" Pack="true" PackagePath="tools/" />
@@ -81,19 +100,46 @@
       <UpstreamRepoUrl>https://github.com/eclipse-cyclonedds/cyclonedds</UpstreamRepoUrl>
     </PropertyGroup>
     
-    <Exec Command="git rev-parse HEAD" ConsoleToMSBuild="true" WorkingDirectory="$(NativeDir)" StandardOutputImportance="Low">
-      <Output TaskParameter="ConsoleOutput" PropertyName="NativeFullCommit" />
-    </Exec>
-    
-    <Exec Command="git merge-base origin/master HEAD" ConsoleToMSBuild="true" WorkingDirectory="$(NativeDir)" StandardOutputImportance="Low">
-      <Output TaskParameter="ConsoleOutput" PropertyName="NativeBaseCommit" />
+    <Exec Command="git rev-parse HEAD" ConsoleToMSBuild="true" WorkingDirectory="$(NativeDir)" StandardOutputImportance="Low" IgnoreExitCode="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="NativeFullCommitRaw" />
     </Exec>
 
-    <Exec Command="git config --get remote.origin.url" ConsoleToMSBuild="true" WorkingDirectory="$(NativeDir)" StandardOutputImportance="Low">
-      <Output TaskParameter="ConsoleOutput" PropertyName="NativeRepoUrl" />
+    <Exec Command="git for-each-ref --format=&quot;%25(refname)&quot; refs/remotes/origin/main" ConsoleToMSBuild="true" WorkingDirectory="$(NativeDir)" StandardOutputImportance="Low" IgnoreExitCode="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="NativeOriginMainRefRaw" />
+    </Exec>
+
+    <Exec Command="git for-each-ref --format=&quot;%25(refname)&quot; refs/remotes/origin/master" ConsoleToMSBuild="true" WorkingDirectory="$(NativeDir)" StandardOutputImportance="Low" IgnoreExitCode="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="NativeOriginMasterRefRaw" />
+    </Exec>
+
+    <Exec Command="git merge-base origin/main HEAD" ConsoleToMSBuild="true" WorkingDirectory="$(NativeDir)" StandardOutputImportance="Low" IgnoreExitCode="true" Condition="'$(NativeOriginMainRef)' != ''">
+      <Output TaskParameter="ConsoleOutput" PropertyName="NativeBaseCommitMainRaw" />
+    </Exec>
+
+    <Exec Command="git merge-base origin/master HEAD" ConsoleToMSBuild="true" WorkingDirectory="$(NativeDir)" StandardOutputImportance="Low" IgnoreExitCode="true" Condition="'$(NativeOriginMasterRef)' != ''">
+      <Output TaskParameter="ConsoleOutput" PropertyName="NativeBaseCommitMasterRaw" />
+    </Exec>
+
+    <Exec Command="git config --get remote.origin.url" ConsoleToMSBuild="true" WorkingDirectory="$(NativeDir)" StandardOutputImportance="Low" IgnoreExitCode="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="NativeRepoUrlRaw" />
     </Exec>
 
     <PropertyGroup>
+      <NativeFullCommit>$([System.String]::Copy('$(NativeFullCommitRaw)').Trim())</NativeFullCommit>
+      <NativeOriginMainRef>$([System.String]::Copy('$(NativeOriginMainRefRaw)').Trim())</NativeOriginMainRef>
+      <NativeOriginMasterRef>$([System.String]::Copy('$(NativeOriginMasterRefRaw)').Trim())</NativeOriginMasterRef>
+      <NativeBaseCommitMain>$([System.String]::Copy('$(NativeBaseCommitMainRaw)').Trim())</NativeBaseCommitMain>
+      <NativeBaseCommitMaster>$([System.String]::Copy('$(NativeBaseCommitMasterRaw)').Trim())</NativeBaseCommitMaster>
+      <NativeRepoUrl>$([System.String]::Copy('$(NativeRepoUrlRaw)').Trim())</NativeRepoUrl>
+
+      <NativeBaseCommit Condition="'$(NativeBaseCommitMain)' != ''">$(NativeBaseCommitMain)</NativeBaseCommit>
+      <NativeBaseCommit Condition="'$(NativeBaseCommit)' == '' and '$(NativeBaseCommitMaster)' != ''">$(NativeBaseCommitMaster)</NativeBaseCommit>
+      <NativeBaseCommit Condition="'$(NativeBaseCommit)' == '' and '$(NativeFullCommit)' != ''">$(NativeFullCommit)</NativeBaseCommit>
+      <NativeBaseCommit Condition="'$(NativeBaseCommit)' == ''">unknown</NativeBaseCommit>
+
+      <NativeFullCommit Condition="'$(NativeFullCommit)' == ''">unknown</NativeFullCommit>
+      <NativeRepoUrl Condition="'$(NativeRepoUrl)' == ''">unknown</NativeRepoUrl>
+
       <NativeVersionInfo>
 {
   "Original": {

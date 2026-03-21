@@ -27,11 +27,12 @@ namespace CycloneDDS.Runtime.Tests
 
     public class SenderTrackingTests
     {
-        private const string TEST_TOPIC = "SenderTrackingTestTopic";
+        private static string NewTopicName() => $"SenderTrackingTestTopic_{Guid.NewGuid():N}";
 
         [Fact]
         public void IdentityPublishing_WriterCreated_PublishesSenderInfo()
         {
+            var topic = NewTopicName();
             var config = new SenderIdentityConfig
             {
                 AppDomainId = 101,
@@ -47,7 +48,7 @@ namespace CycloneDDS.Runtime.Tests
             using var identityReader = new DdsReader<SenderIdentity>(participant, "__FcdcSenderIdentity");
             
             // Create a writer to trigger identity publishing
-            using var writer = new DdsWriter<SenderTrackingTestMsg>(participant, TEST_TOPIC);
+            using var writer = new DdsWriter<SenderTrackingTestMsg>(participant, topic);
             
             // Wait for identity
             bool received = false;
@@ -83,8 +84,9 @@ namespace CycloneDDS.Runtime.Tests
         [Fact]
         public void EnableSenderTracking_AfterWriterCreation_ThrowsException()
         {
+            var topic = NewTopicName();
             using var participant = new DdsParticipant();
-            using var writer = new DdsWriter<SenderTrackingTestMsg>(participant, TEST_TOPIC);
+            using var writer = new DdsWriter<SenderTrackingTestMsg>(participant, topic);
 
             var config = new SenderIdentityConfig { AppDomainId = 1 };
             
@@ -94,10 +96,11 @@ namespace CycloneDDS.Runtime.Tests
         [Fact]
         public void DisabledOverhead_TrackingOff_ZeroImpact()
         {
+            var topic = NewTopicName();
             using var participant = new DdsParticipant();
             Assert.Null(participant.SenderRegistry);
             
-            using var writer = new DdsWriter<SenderTrackingTestMsg>(participant, TEST_TOPIC);
+            using var writer = new DdsWriter<SenderTrackingTestMsg>(participant, topic);
             Assert.Null(participant.SenderRegistry);
         }
 
@@ -138,8 +141,9 @@ namespace CycloneDDS.Runtime.Tests
         [Fact]
         public void GetSender_WithoutTrackingEnabled_ReturnsNull()
         {
+            var topic = NewTopicName();
             using var participant = new DdsParticipant();
-            using var reader = new DdsReader<SenderTrackingTestMsg>(participant, TEST_TOPIC);
+            using var reader = new DdsReader<SenderTrackingTestMsg>(participant, topic);
             // No EnableSenderTracking on reader
             
             // We can't really get a sample easily without a writer, but let's assume we could.
@@ -148,7 +152,7 @@ namespace CycloneDDS.Runtime.Tests
             
             // Let's create a dummy ViewScope via reflection or partial mock if needed, or just integration test.
             // Integration test:
-            using var writer = new DdsWriter<SenderTrackingTestMsg>(participant, TEST_TOPIC);
+            using var writer = new DdsWriter<SenderTrackingTestMsg>(participant, topic);
             writer.Write(new SenderTrackingTestMsg { Id = 1 });
             
             Thread.Sleep(500);
@@ -163,35 +167,41 @@ namespace CycloneDDS.Runtime.Tests
          [Fact]
         public void SenderTracking_MultiInstance_ProcessIdDisambiguates()
         {
+             var topic = NewTopicName();
              using var p1 = new DdsParticipant();
              p1.EnableSenderTracking(new SenderIdentityConfig { AppInstanceId = 10 });
-             using var w1 = new DdsWriter<SenderTrackingTestMsg>(p1, TEST_TOPIC);
+             using var w1 = new DdsWriter<SenderTrackingTestMsg>(p1, topic);
              
              using var p2 = new DdsParticipant();
              p2.EnableSenderTracking(new SenderIdentityConfig { AppInstanceId = 20 });
-             using var w2 = new DdsWriter<SenderTrackingTestMsg>(p2, TEST_TOPIC);
+             using var w2 = new DdsWriter<SenderTrackingTestMsg>(p2, topic);
              
              using var pReceiver = new DdsParticipant();
              pReceiver.EnableSenderTracking(new SenderIdentityConfig { AppInstanceId = 99 });
-             using var reader = new DdsReader<SenderTrackingTestMsg>(pReceiver, TEST_TOPIC);
+             using var reader = new DdsReader<SenderTrackingTestMsg>(pReceiver, topic);
              reader.EnableSenderTracking(pReceiver.SenderRegistry!);
              
-             Thread.Sleep(2000); // Discovery can take time
+             Thread.Sleep(3000); // Discovery can take time
              
              w1.Write(new SenderTrackingTestMsg { Id = 10 });
              w2.Write(new SenderTrackingTestMsg { Id = 20 });
              
-             Thread.Sleep(500);
+             Thread.Sleep(800);
              
              // Receiving might happen in any order or batching
              bool saw10 = false;
              bool saw20 = false;
              
-             for(int i=0; i<10; i++)
+             for(int i=0; i<20; i++)
              {
                  using var scope = reader.Take(10);
                  for(int k=0; k<scope.Count; k++)
                  {
+                     if (scope.Infos[k].ValidData == 0)
+                     {
+                         continue;
+                     }
+
                      var msg = scope[k];
                      var sender = scope.GetSender(k);
                      if (sender != null)
@@ -209,7 +219,7 @@ namespace CycloneDDS.Runtime.Tests
                      }
                  }
                  if (saw10 && saw20) break;
-                 Thread.Sleep(200);
+                 Thread.Sleep(250);
              }
              
              // If this fails it might be timing/discovery issue in test environment

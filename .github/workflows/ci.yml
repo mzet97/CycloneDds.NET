@@ -10,27 +10,114 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
-    
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            shell: pwsh
+            cmake_generator: "Visual Studio 17 2022"
+            native_script: .\build\native-win.ps1
+          - os: ubuntu-latest
+            shell: bash
+            cmake_generator: "Unix Makefiles"
+            native_script: ./build/native-linux.sh
+
     env:
-      # This ensures the build script can find CMake if not in default path (though it usually is on runners)
-      CMAKE_GENERATOR: "Visual Studio 17 2022"
+      CMAKE_GENERATOR: ${{ matrix.cmake_generator }}
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0 # Required for Nerdbank.GitVersioning to determine version
         submodules: recursive
 
     - name: Setup .NET
-      uses: actions/setup-dotnet@v3
+      uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 8.0.x
+
+    - name: Install Linux build dependencies
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake
 
     - name: Display Tools Versions
       run: |
         dotnet --version
         cmake --version
+        ${{ matrix.shell }} --version || true
+
+    - name: Build Native
+      shell: ${{ matrix.shell }}
+      run: ${{ matrix.native_script }}
+
+    - name: Set Native Path (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        echo "CYCLONEDDS_NATIVE_DIR=${{ github.workspace }}\artifacts\native\win-x64" >> $env:GITHUB_ENV
+
+    - name: Set Native Path (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        echo "CYCLONEDDS_NATIVE_DIR=${{ github.workspace }}/artifacts/native/linux-x64" >> $GITHUB_ENV
+        echo "LD_LIBRARY_PATH=${{ github.workspace }}/artifacts/native/linux-x64:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+
+    - name: Build Solution
+      run: dotnet build -c Release
+
+    - name: Run Tests
+      run: dotnet test -c Release --no-build --logger trx --results-directory artifacts/testresults
+
+    - name: Linux NuGet Smoke (Real DDS)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: bash ./build/linux-nuget-smoke.sh
+
+    - name: Upload Test Results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results-${{ runner.os }}
+        path: artifacts/testresults/**/*.trx
+
+    - name: Upload Native Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: native-artifacts-${{ runner.os }}
+        path: artifacts/native/
+
+  pack:
+    needs: build
+    runs-on: windows-latest
+    if: github.event_name != 'pull_request'  # Only pack on main branch or tags
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        submodules: recursive
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+
+    - name: Download Windows Native Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: native-artifacts-windows-latest
+        path: artifacts/native
+
+    - name: Download Linux Native Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: native-artifacts-ubuntu-latest
+        path: artifacts/native
 
     - name: Build, Test, and Pack
       shell: pwsh

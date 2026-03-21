@@ -313,17 +313,42 @@ namespace CycloneDDS.Runtime
              
              var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
              _waitForReaderTaskSource = tcs;
-             
-             if (CurrentStatus.CurrentCount > 0) 
+
+             try
+             {
+                 if (CurrentStatus.CurrentCount > 0) return true;
+
+                 var remaining = timeout == default ? Timeout.InfiniteTimeSpan : timeout;
+                 var pollInterval = TimeSpan.FromMilliseconds(50);
+
+                 while (true)
+                 {
+                     if (CurrentStatus.CurrentCount > 0) return true;
+
+                     if (remaining == TimeSpan.Zero) return false;
+
+                     Task delayTask;
+                     if (remaining == Timeout.InfiniteTimeSpan)
+                     {
+                         delayTask = Task.Delay(pollInterval);
+                     }
+                     else
+                     {
+                         var waitFor = remaining < pollInterval ? remaining : pollInterval;
+                         delayTask = Task.Delay(waitFor);
+                         remaining -= waitFor;
+                     }
+
+                     var completed = await Task.WhenAny(tcs.Task, delayTask).ConfigureAwait(false);
+                     if (completed == tcs.Task && tcs.Task.IsCompletedSuccessfully && tcs.Task.Result)
+                     {
+                         return true;
+                     }
+                 }
+             }
+             finally
              {
                  _waitForReaderTaskSource = null;
-                 return true;
-             }
-             
-             using var timeoutCts = new CancellationTokenSource(timeout == default ? TimeSpan.FromMilliseconds(-1) : timeout);
-             using (timeoutCts.Token.Register(() => tcs.TrySetResult(false))) 
-             {
-                  return await tcs.Task;
              }
         }
 
@@ -342,12 +367,13 @@ namespace CycloneDDS.Runtime
                  if (_writerHandle != null)
                  {
                      DdsApi.dds_writer_set_listener(_writerHandle.NativeHandle, _listener);
+                     DdsApi.dds_set_status_mask(_writerHandle.NativeHandle.Handle, DdsApi.DDS_PUBLICATION_MATCHED_STATUS);
                  }
              }
         }
 
         // [MonoPInvokeCallback(typeof(DdsApi.DdsOnPublicationMatched))]
-        private static void OnPublicationMatched(int writer, ref DdsApi.DdsPublicationMatchedStatus status, IntPtr arg)
+        private static void OnPublicationMatched(int writer, DdsApi.DdsPublicationMatchedStatus status, IntPtr arg)
         {
              if (arg == IntPtr.Zero) return;
              try
