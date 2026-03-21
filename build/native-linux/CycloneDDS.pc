@@ -1,9 +1,0 @@
-prefix=/mnt/e/TI/git/tese/CycloneDds.NET/artifacts/native-install
-includedir=${prefix}/include
-libdir=${prefix}/lib
-
-Name: CycloneDDS
-Description: Eclipse Cyclone DDS library
-Version: 0.11.0
-Libs: -L${libdir} -lddsc
-Cflags: -I${includedir}
