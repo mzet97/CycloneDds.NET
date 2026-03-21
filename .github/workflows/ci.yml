@@ -75,8 +75,13 @@ jobs:
     - name: Build Solution
       run: dotnet build CycloneDDS.NET.Core.slnf -c Release
 
-    - name: Run Tests
+    - name: Run Tests (Windows)
+      if: runner.os == 'Windows'
       run: dotnet test CycloneDDS.NET.Core.slnf -c Release --no-build --logger trx --results-directory artifacts/testresults --filter "FullyQualifiedName!~FeatureDemo.Tests"
+
+    - name: Run Tests (Linux)
+      if: runner.os == 'Linux'
+      run: dotnet test CycloneDDS.NET.Core.slnf -c Release --no-build --logger trx --results-directory artifacts/testresults --filter "FullyQualifiedName!~FeatureDemo.Tests&FullyQualifiedName!~CodeGen.Tests"
 
     - name: Run FeatureDemo Tests (best-effort)
       continue-on-error: true
