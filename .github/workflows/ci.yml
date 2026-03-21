@@ -58,7 +58,7 @@ jobs:
     - name: Build Native (Linux)
       if: runner.os == 'Linux'
       shell: bash
-      run: ./build/native-linux.sh
+      run: bash ./build/native-linux.sh
 
     - name: Set Native Path (Windows)
       if: runner.os == 'Windows'
@@ -73,10 +73,10 @@ jobs:
         echo "LD_LIBRARY_PATH=${{ github.workspace }}/artifacts/native/linux-x64:$LD_LIBRARY_PATH" >> $GITHUB_ENV
 
     - name: Build Solution
-      run: dotnet build -c Release
+      run: dotnet build CycloneDDS.NET.Core.slnf -c Release
 
     - name: Run Tests
-      run: dotnet test -c Release --no-build --logger trx --results-directory artifacts/testresults
+      run: dotnet test CycloneDDS.NET.Core.slnf -c Release --no-build --logger trx --results-directory artifacts/testresults
 
     - name: Linux NuGet Smoke (Real DDS)
       if: runner.os == 'Linux'
