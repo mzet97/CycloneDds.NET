@@ -22,8 +22,8 @@ $ArtifactsDir = Join-Path $RepoRoot "artifacts"
 $NuGetDir = Join-Path $ArtifactsDir "nuget"
 
 # Detect OS and select appropriate native build script
-$IsWindows = $PSVersionTable.PSVersion.Major -lt 7 -or $IsWindows
-if ($IsWindows) {
+$isWin = ($PSVersionTable.PSVersion.Major -lt 7) -or $IsWindows
+if ($isWin) {
     $NativeScript = Join-Path $PSScriptRoot "native-win.ps1"
     Write-Host "Detected Windows - using native-win.ps1" -ForegroundColor Gray
 } else {

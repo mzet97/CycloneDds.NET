@@ -23,8 +23,8 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = $PSScriptRoot | Split-Path -Parent
 
 # Detect OS and set appropriate native artifacts path
-$IsWindows = $PSVersionTable.PSVersion.Major -lt 7 -or $IsWindows
-if ($IsWindows) {
+$isWin = ($PSVersionTable.PSVersion.Major -lt 7) -or $IsWindows
+if ($isWin) {
     $NativeArtifacts = Join-Path $RepoRoot "artifacts/native/win-x64/ddsc.dll"
     $NativeScript = Join-Path $PSScriptRoot "native-win.ps1"
     Write-Host "Detected Windows" -ForegroundColor Gray
