@@ -153,12 +153,11 @@ jobs:
         if-no-files-found: warn
 
     - name: Publish to GitHub Packages
-      run: |
-        dotnet nuget push artifacts/nuget/*.nupkg `
-          --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" `
-          --api-key ${{ secrets.GITHUB_TOKEN }} `
-          --skip-duplicate
       shell: pwsh
+      run: |
+        Get-ChildItem artifacts/nuget/*.nupkg | ForEach-Object {
+          dotnet nuget push $_.FullName --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" --api-key ${{ secrets.GITHUB_TOKEN }} --skip-duplicate
+        }
 
   release:
     needs: pack
