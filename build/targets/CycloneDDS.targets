@@ -20,8 +20,10 @@
     <CycloneDdsPackageRoot>$(MSBuildThisFileDirectory)../</CycloneDdsPackageRoot>
     <CycloneDdsToolsPath>$(CycloneDdsPackageRoot)runtimes/$(CycloneDdsRid)/native/</CycloneDdsToolsPath>
     <CycloneDdsCodeGenPath>$(CycloneDdsPackageRoot)tools/CycloneDDS.CodeGen.dll</CycloneDdsCodeGenPath>
+    <!-- Minimal references for CodeGen (avoids Windows 8191 char command line limit with @(ReferencePath)) -->
+    <CycloneDdsCodeGenRefs>$(CycloneDdsPackageRoot)lib/net8.0/CycloneDDS.Schema.dll;$(CycloneDdsPackageRoot)lib/net8.0/CycloneDDS.Core.dll;$(CycloneDdsPackageRoot)lib/net8.0/CycloneDDS.Runtime.dll</CycloneDdsCodeGenRefs>
   </PropertyGroup>
-  
+
   <!-- Code Generator Target -->
   <Target Name="CycloneDdsGenerate" BeforeTargets="CoreCompile" Condition="'$(CycloneDdsDisableCodeGen)' != 'true'">
     <PropertyGroup>
@@ -32,20 +34,22 @@
     </PropertyGroup>
 
     <Message Text="Running CycloneDDS Code Generator..." Importance="high" Condition="'$(RunCycloneDdsCodeGen)' == 'true'" />
-    
+
     <MakeDir Directories="$(CycloneDdsGeneratedDir)" />
-    
-    <!-- 
+
+    <!--
       Invoke the CodeGen tool only during real builds.
       Arg 1: Source Directory (Project Dir)
       Arg 2: Output Directory (obj/...)
-      Arg 3: Referenced Assemblies (semicolon separated list)
+      Arg 3: CycloneDDS assemblies only (Schema + Core + Runtime)
+      Note: Using minimal refs instead of @(ReferencePath) to avoid exceeding
+      Windows command line limit (8191 chars) on projects with many dependencies.
     -->
-    <Exec Command="dotnet &quot;$(CycloneDdsCodeGenPath)&quot; &quot;$(MSBuildProjectDirectory)&quot; &quot;$(CycloneDdsGeneratedDir)&quot; &quot;@(ReferencePath)&quot;"
+    <Exec Command="dotnet &quot;$(CycloneDdsCodeGenPath)&quot; &quot;$(MSBuildProjectDirectory)&quot; &quot;$(CycloneDdsGeneratedDir)&quot; &quot;$(CycloneDdsCodeGenRefs)&quot;"
           Condition="'$(RunCycloneDdsCodeGen)' == 'true' AND '$(OS)' == 'Unix'"
           EnvironmentVariables="LD_LIBRARY_PATH=$(CycloneDdsLdLibraryPath)" />
 
-    <Exec Command="dotnet &quot;$(CycloneDdsCodeGenPath)&quot; &quot;$(MSBuildProjectDirectory)&quot; &quot;$(CycloneDdsGeneratedDir)&quot; &quot;@(ReferencePath)&quot;"
+    <Exec Command="dotnet &quot;$(CycloneDdsCodeGenPath)&quot; &quot;$(MSBuildProjectDirectory)&quot; &quot;$(CycloneDdsGeneratedDir)&quot; &quot;$(CycloneDdsCodeGenRefs)&quot;"
           Condition="'$(RunCycloneDdsCodeGen)' == 'true' AND '$(OS)' != 'Unix'" />
     
     <ItemGroup>
